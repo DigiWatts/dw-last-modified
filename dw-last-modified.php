@@ -1,7 +1,7 @@
 <?php
 /*
 	Plugin Name: DW Last Modified
-	Version: 1.2.0
+	Version: 1.3.0
 	Description: Adds the last modified date, time and modifying user to the admin interface, including custom post types. Use the [dw-last-modified] shortcode in your content!
 	Text Domain: dw-last-modified
 	Author: Erik Mitchell
@@ -42,7 +42,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'DW_LAST_MODIFIED_VERSION', '1.2.0' );
+define( 'DW_LAST_MODIFIED_VERSION', '1.3.0' );
 
 class DWLastModified
 {
