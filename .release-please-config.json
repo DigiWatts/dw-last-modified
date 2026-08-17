@@ -1,0 +1,49 @@
+{
+	"$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+	"include-v-in-tag": false,
+	"pull-request-title-pattern": "chore: release ${version}",
+	"changelog-sections": [
+		{
+			"type": "feat",
+			"section": "Features"
+		},
+		{
+			"type": "fix",
+			"section": "Bug Fixes"
+		},
+		{
+			"type": "dev",
+			"section": "Developer"
+		},
+		{
+			"type": "perf",
+			"section": "Performance Improvements"
+		}
+	],
+	"packages": {
+		".": {
+			"release-type": "php",
+			"changelog-path": "CHANGELOG.md",
+			"extra-files": [
+				{
+					"type": "generic",
+					"path": "dw-last-modified.php",
+					"pattern": "define\\( 'DW_LAST_MODIFIED_VERSION', '.*' \\);",
+					"replace": "define( 'DW_LAST_MODIFIED_VERSION', '${version}' );"
+				},
+				{
+					"type": "generic",
+					"path": "dw-last-modified.php",
+					"pattern": "Version:\\s*[0-9.]+",
+					"replace": "Version: ${version}"
+				},
+				{
+					"type": "generic",
+					"path": "readme.txt",
+					"pattern": "Stable tag:\\s*[0-9.]+",
+					"replace": "Stable tag: ${version}"
+				}
+			]
+		}
+	}
+}

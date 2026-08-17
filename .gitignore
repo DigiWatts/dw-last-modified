@@ -1,3 +1,5 @@
 .svn
 /vendor/
 .phpunit.result.cache
+/build/
+/dw-last-modified.zip
