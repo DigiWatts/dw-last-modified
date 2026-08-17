@@ -56,8 +56,9 @@ if [ -f ./readme.txt ]; then
 fi
 
 # ------------------------------------------------
-# Verify - the update proxy reads the header, so a silent miss ships a
-# plugin that never reports an update as available.
+# Verify - core compares the Version header against the version the updater
+# reports from the release, so a silent miss here ships a plugin that either
+# never offers the update or offers one that reinstalls the same version.
 # ------------------------------------------------
 if ! grep -Eq "^[[:space:]]*Version:[[:space:]]*$VERSION([[:space:]]|$)" "./$PLUGIN_FILE"; then
 	echo "[ERROR] Failed to update the Version header in $PLUGIN_FILE"
