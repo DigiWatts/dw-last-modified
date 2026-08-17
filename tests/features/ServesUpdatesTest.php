@@ -233,15 +233,18 @@ class ServesUpdatesTest extends WP_UnitTestCase
     /** @test */
     function renders_release_notes_as_html()
     {
+        // Shaped like a real release-please release body, which opens with the
+        // version at ## and puts each section at ###.
         $this->mock_release($this->release(array(
-            'body' => "## Features\n\n* Added [a thing](https://example.com/thing)\n* Added `a_function()`\n\nA closing note.\n",
+            'body' => "## [9.9.9](https://example.com/compare) (2026-01-15)\n\n### Features\n\n* Added [a thing](https://example.com/thing)\n* Added `a_function()`\n\nA closing note.\n",
         )));
 
         $changelog = $this->changelog();
 
-        // release-please starts its notes at ##, stepped down so the modal's own
-        // section heading stays above them.
-        $this->assertStringContainsString('<h3>Features</h3>', $changelog);
+        // Headings are stepped down one level so that the modal's own section
+        // heading stays above them in the outline.
+        $this->assertStringContainsString('<h3><a href="https://example.com/compare">9.9.9</a> (2026-01-15)</h3>', $changelog);
+        $this->assertStringContainsString('<h4>Features</h4>', $changelog);
         $this->assertStringContainsString('<ul>', $changelog);
         $this->assertStringContainsString('</ul>', $changelog);
         $this->assertStringContainsString('<a href="https://example.com/thing">a thing</a>', $changelog);
@@ -323,7 +326,7 @@ class ServesUpdatesTest extends WP_UnitTestCase
         return array_merge(array(
             'tag_name'     => '9.9.9',
             'published_at' => '2026-01-15T12:00:00Z',
-            'body'         => "## Features\n\n* Something new\n",
+            'body'         => "## [9.9.9](https://example.com/compare) (2026-01-15)\n\n### Features\n\n* Something new\n",
             'assets'       => array(
                 array(
                     'name'                 => 'dw-last-modified.zip',
