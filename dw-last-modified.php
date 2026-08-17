@@ -380,6 +380,432 @@ class DWLastModified
 
 } // DWLastModified
 
+/**
+ * Serves plugin updates from the project's GitHub releases.
+ *
+ * The `Update URI` header at the top of this file stops wordpress.org from
+ * answering update checks for this slug, and makes core fire the
+ * `update_plugins_github.com` filter on every check instead. Nothing is hooked
+ * to that filter by default, so without this class the plugin reports no
+ * updates at all.
+ *
+ * The repository is public, so the releases API is queried unauthenticated -
+ * there is no token, and so nothing that needs a server-side proxy to hold one.
+ */
+class DWLastModifiedUpdater
+{
+	/**
+	 * The repository releases are published from.
+	 */
+	const REPO = 'DigiWatts/dw-last-modified';
+
+	/**
+	 * The release asset to install from.
+	 *
+	 * bin/build.sh zips the plugin inside a top-level dw-last-modified/ folder,
+	 * which is the layout core needs in order to replace an installed plugin in
+	 * place. GitHub's auto-generated source archives use a
+	 * dw-last-modified-{version}/ folder instead, which would install a second
+	 * copy alongside the current one rather than over it - so a release that is
+	 * missing this asset is deliberately treated as no release at all.
+	 */
+	const ASSET = 'dw-last-modified.zip';
+
+	const CACHE_KEY = 'dw_last_modified_release';
+
+	/**
+	 * How long a successful lookup is cached, in seconds.
+	 */
+	const CACHE_TTL = 43200; // 12 hours
+
+	/**
+	 * How long a failed lookup is cached, in seconds.
+	 *
+	 * Unauthenticated GitHub allows 60 requests an hour per IP, which on shared
+	 * hosting is an IP this site does not have to itself. Caching failures keeps
+	 * a rate-limited or unreachable API from being re-queried on every load of
+	 * the plugins screen.
+	 */
+	const FAILURE_TTL = 3600; // 1 hour
+
+	/**
+	 * @var string Absolute path to the main plugin file.
+	 */
+	private $file;
+
+	/**
+	 * @var string Plugin basename, e.g. dw-last-modified/dw-last-modified.php
+	 */
+	private $basename;
+
+	/**
+	 * @var string Plugin slug, e.g. dw-last-modified
+	 */
+	private $slug;
+
+	/**
+	 * @param string $plugin_file Absolute path to the main plugin file.
+	 */
+	public function __construct( $plugin_file )
+	{
+		$this->file = $plugin_file;
+
+		// Matches the keys core uses for installed plugins, which is what the
+		// update filter is handed to identify which plugin it is asking about.
+		$this->basename = plugin_basename( $plugin_file );
+
+		// Taken from the plugin's own directory rather than from the basename, so
+		// that it stays correct when the directory is symlinked and
+		// plugin_basename() cannot resolve it against WP_PLUGIN_DIR.
+		$parent = dirname( $plugin_file );
+
+		$this->slug = ( wp_normalize_path( $parent ) === wp_normalize_path( WP_PLUGIN_DIR ) )
+			// A copy dropped straight into wp-content/plugins has no directory of
+			// its own, so the file name is the slug. The zip built by
+			// bin/build.sh always installs into a directory.
+			? basename( $plugin_file, '.php' )
+			: basename( $parent );
+
+		add_filter( 'update_plugins_github.com', array( $this, 'check_for_update' ), 10, 3 );
+		add_filter( 'plugins_api', array( $this, 'plugin_information' ), 10, 3 );
+		add_action( 'upgrader_process_complete', array( $this, 'flush_cache_after_update' ), 10, 2 );
+	}
+
+	/**
+	 * Answers core's update check for this plugin.
+	 * @param  array|false 	$update 		Update data from an earlier callback, or false.
+	 * @param  array 		$plugin_data 	Headers of the plugin being checked.
+	 * @param  string 		$plugin_file 	Basename of the plugin being checked.
+	 * @return array|false 					Release data, or $update untouched.
+	 */
+	public function check_for_update( $update, $plugin_data, $plugin_file )
+	{
+		// The filter fires for every installed plugin whose Update URI points at
+		// github.com, not only for this one.
+		if ( $plugin_file !== $this->basename )
+			return $update;
+
+		$release = $this->get_release();
+
+		if ( ! $release )
+			return $update;
+
+		// Returned whether or not it is newer than what is installed: core runs
+		// the version comparison itself and files the result under either
+		// `response` or `no_update`, and it is the `no_update` entry that makes
+		// the auto-update toggle appear for the plugin.
+		return array(
+			'id'           => 'github.com/' . self::REPO,
+			'slug'         => $this->slug,
+			'plugin'       => $this->basename,
+			'version'      => $release['version'],
+			'url'          => isset( $plugin_data['PluginURI'] ) ? $plugin_data['PluginURI'] : '',
+			'package'      => $release['package'],
+			'tested'       => $this->readme_field( 'Tested up to' ),
+			'requires'     => isset( $plugin_data['RequiresWP'] ) ? $plugin_data['RequiresWP'] : '',
+			'requires_php' => isset( $plugin_data['RequiresPHP'] ) ? $plugin_data['RequiresPHP'] : '',
+		);
+	}
+
+	/**
+	 * Supplies the "View details" modal, which core would otherwise request from
+	 * wordpress.org - where this plugin is not published.
+	 * @param  false|object|array 	$result 	Result from an earlier callback.
+	 * @param  string 				$action 	The API action being performed.
+	 * @param  object 				$args 		Arguments for the request.
+	 * @return false|object|array
+	 */
+	public function plugin_information( $result, $action, $args )
+	{
+		if ( 'plugin_information' !== $action )
+			return $result;
+
+		if ( ! isset( $args->slug ) || $args->slug !== $this->slug )
+			return $result;
+
+		$release = $this->get_release();
+
+		if ( ! $release )
+			return $result;
+
+		if ( ! function_exists( 'get_plugin_data' ) )
+			require_once ABSPATH . 'wp-admin/includes/plugin.php';
+
+		$data = get_plugin_data( $this->file, false, false );
+
+		return (object) array(
+			'name'          => $data['Name'],
+			'slug'          => $this->slug,
+			'version'       => $release['version'],
+			'author'        => $this->author_link( $data ),
+			'homepage'      => $data['PluginURI'],
+			'download_link' => $release['package'],
+			'requires'      => isset( $data['RequiresWP'] ) ? $data['RequiresWP'] : '',
+			'requires_php'  => isset( $data['RequiresPHP'] ) ? $data['RequiresPHP'] : '',
+			'tested'        => $this->readme_field( 'Tested up to' ),
+			'last_updated'  => $release['published'],
+			'sections'      => array(
+				'description' => wpautop( wp_kses_post( $data['Description'] ) ),
+				'changelog'   => $this->changelog_html( $release['changelog'] ),
+			),
+		);
+	}
+
+	/**
+	 * Drops the cached release once an update has run, so that the plugins screen
+	 * stops offering a version which is now installed.
+	 * @param  WP_Upgrader 	$upgrader 		The upgrader that ran.
+	 * @param  array 		$hook_extra 	Details of what was upgraded.
+	 * @return void
+	 */
+	public function flush_cache_after_update( $upgrader, $hook_extra )
+	{
+		if ( ! isset( $hook_extra['action'], $hook_extra['type'] ) )
+			return;
+
+		if ( 'update' !== $hook_extra['action'] || 'plugin' !== $hook_extra['type'] )
+			return;
+
+		delete_site_transient( self::CACHE_KEY );
+	}
+
+	/**
+	 * Returns the latest published release, from cache where possible.
+	 * @return array|false 	Keys are version, package, changelog and published.
+	 */
+	private function get_release()
+	{
+		$cached = $this->is_forced_check() ? false : get_site_transient( self::CACHE_KEY );
+
+		if ( is_array( $cached ) )
+			return $cached;
+
+		// A failed lookup is cached as an empty string, which is distinguishable
+		// from the false of a transient that is simply absent or expired.
+		if ( '' === $cached )
+			return false;
+
+		$release = $this->fetch_release();
+
+		if ( ! $release )
+		{
+			set_site_transient( self::CACHE_KEY, '', self::FAILURE_TTL );
+			return false;
+		}
+
+		set_site_transient( self::CACHE_KEY, $release, self::CACHE_TTL );
+
+		return $release;
+	}
+
+	/**
+	 * Requests the latest release from the GitHub API.
+	 *
+	 * The `latest` endpoint is used rather than the full release list because it
+	 * already excludes drafts and prereleases, so neither can be offered to
+	 * sites as an update.
+	 *
+	 * @return array|false 	Release data, or false if none is usable.
+	 */
+	private function fetch_release()
+	{
+		$response = wp_remote_get(
+			'https://api.github.com/repos/' . self::REPO . '/releases/latest',
+			array(
+				'timeout' => 10,
+				'headers' => array(
+					'Accept'               => 'application/vnd.github+json',
+					'X-GitHub-Api-Version' => '2022-11-28',
+				),
+			)
+		);
+
+		if ( is_wp_error( $response ) || 200 !== wp_remote_retrieve_response_code( $response ) )
+			return false;
+
+		$release = json_decode( wp_remote_retrieve_body( $response ), true );
+
+		if ( ! is_array( $release ) || empty( $release['tag_name'] ) )
+			return false;
+
+		$package = $this->find_asset( isset( $release['assets'] ) ? $release['assets'] : array() );
+
+		if ( ! $package )
+			return false;
+
+		return array(
+			// Tags are published without a leading v, but one is tolerated so
+			// that a hand-cut tag does not read as a different version than the
+			// one in the plugin header.
+			'version'   => ltrim( (string) $release['tag_name'], 'vV' ),
+			'package'   => $package,
+			'changelog' => isset( $release['body'] ) ? (string) $release['body'] : '',
+			'published' => isset( $release['published_at'] ) ? (string) $release['published_at'] : '',
+		);
+	}
+
+	/**
+	 * Finds the download URL of the built plugin zip among a release's assets.
+	 * @param  array 		$assets 	Assets as returned by the API.
+	 * @return string|false 			Download URL, or false when absent.
+	 */
+	private function find_asset( $assets )
+	{
+		if ( ! is_array( $assets ) )
+			return false;
+
+		foreach ( $assets as $asset )
+		{
+			if ( isset( $asset['name'], $asset['browser_download_url'] ) && self::ASSET === $asset['name'] )
+				return $asset['browser_download_url'];
+		}
+
+		return false;
+	}
+
+	/**
+	 * Reads a single field out of the readme header.
+	 *
+	 * Values like `Tested up to` only exist in readme.txt, not in the plugin
+	 * header, and core needs them to render the compatibility line on the
+	 * plugins screen.
+	 *
+	 * @param  string 	$field 		Field name, e.g. 'Tested up to'.
+	 * @return string 				Field value, or an empty string.
+	 */
+	private function readme_field( $field )
+	{
+		$readme = plugin_dir_path( $this->file ) . 'readme.txt';
+
+		if ( ! is_readable( $readme ) )
+			return '';
+
+		// Only the header block is of interest, so the opening bytes are read
+		// rather than the whole file.
+		$head = (string) file_get_contents( $readme, false, null, 0, 1024 );
+
+		if ( preg_match( '/^' . preg_quote( $field, '/' ) . ':\s*(.+)$/mi', $head, $matches ) )
+			return trim( $matches[1] );
+
+		return '';
+	}
+
+	/**
+	 * Builds the linked author string the details modal expects.
+	 * @param  array 	$data 	Plugin headers from get_plugin_data().
+	 * @return string 			Author name, linked when an author URI is set.
+	 */
+	private function author_link( $data )
+	{
+		if ( empty( $data['Author'] ) )
+			return '';
+
+		if ( empty( $data['AuthorURI'] ) )
+			return esc_html( $data['Author'] );
+
+		return '<a href="' . esc_url( $data['AuthorURI'] ) . '">' . esc_html( $data['Author'] ) . '</a>';
+	}
+
+	/**
+	 * Renders a release body as the HTML the details modal expects.
+	 *
+	 * Release notes are generated as Markdown by release-please, so the small
+	 * subset it emits - headings, bullet lists, links and code spans - is
+	 * converted rather than dropping raw Markdown into the modal.
+	 *
+	 * @param  string 	$markdown 	Release body.
+	 * @return string 				HTML
+	 */
+	private function changelog_html( $markdown )
+	{
+		$markdown = (string) $markdown;
+
+		if ( '' === trim( $markdown ) )
+			return '<p>' . esc_html__( 'No release notes were published for this version.', 'dw-last-modified' ) . '</p>';
+
+		// Escaped up front so that everything below is inserting known-safe tags
+		// into already-escaped text.
+		$html = esc_html( $markdown );
+
+		$html = preg_replace_callback(
+			'/\[([^\]]+)\]\((https?:[^\s)]+)\)/',
+			function ( $matches ) {
+				return '<a href="' . esc_url( html_entity_decode( $matches[2], ENT_QUOTES ) ) . '">' . $matches[1] . '</a>';
+			},
+			$html
+		);
+
+		$html = preg_replace( '/`([^`]+)`/', '<code>$1</code>', $html );
+
+		$output  = '';
+		$in_list = false;
+
+		foreach ( preg_split( '/\R/', $html ) as $line )
+		{
+			$line = trim( $line );
+
+			if ( preg_match( '/^(#{1,6})\s+(.*)$/', $line, $matches ) )
+			{
+				$output .= $this->close_list( $in_list );
+
+				// Release notes start at ##, stepped down one level so that the
+				// modal's own section heading stays above them in the outline.
+				$level   = min( 6, strlen( $matches[1] ) + 1 );
+				$output .= "<h{$level}>{$matches[2]}</h{$level}>";
+				continue;
+			}
+
+			if ( preg_match( '/^[*-]\s+(.*)$/', $line, $matches ) )
+			{
+				if ( ! $in_list )
+				{
+					$output .= '<ul>';
+					$in_list = true;
+				}
+
+				$output .= '<li>' . $matches[1] . '</li>';
+				continue;
+			}
+
+			$output .= $this->close_list( $in_list );
+
+			if ( '' !== $line )
+				$output .= '<p>' . $line . '</p>';
+		}
+
+		return $output . $this->close_list( $in_list );
+	}
+
+	/**
+	 * Closes an open list, clearing the caller's flag by reference.
+	 * @param  bool 	$in_list 	Whether a list is currently open.
+	 * @return string 				The closing tag, or an empty string.
+	 */
+	private function close_list( &$in_list )
+	{
+		if ( ! $in_list )
+			return '';
+
+		$in_list = false;
+
+		return '</ul>';
+	}
+
+	/**
+	 * Whether this request is the "Check again" button on the updates screen.
+	 *
+	 * Core does not pass that intent through to the update filters, so the
+	 * request itself has to be inspected in order to bypass the cache.
+	 *
+	 * @return bool
+	 */
+	private function is_forced_check()
+	{
+		return is_admin() && ! empty( $_GET['force-check'] );
+	}
+
+} // DWLastModifiedUpdater
+
 function get_the_dw_last_modified( $context = null, $override = null )
 {
 	return DWLastModified::get_instance()->construct_timestamp( $context, $override );
@@ -392,3 +818,5 @@ function the_dw_last_modified( $context = null, $override = null )
 
 //	MAKE IT SO.
 DWLastModified::get_instance();
+
+new DWLastModifiedUpdater( __FILE__ );
