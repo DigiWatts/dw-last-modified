@@ -1,6 +1,6 @@
 === Last Modified Timestamp ===
-Stable tag: 1.0.6
-Contributors: aaemnnosttv
+Stable tag: 1.1.0
+Contributors: aaemnnosttv, erikdmitchell
 Donate link: https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=LRA4JZYALHX82
 Tags: page modified, post modified, updated at, last modified, modified time
 Requires at least: 4.6
@@ -8,15 +8,15 @@ Requires PHP: 5.3
 Tested up to: 6.8.2
 License: GPLv2 or later
 
-Adds the last modified time to the admin interface as well as a [last-modified] shortcode to use on the front-end.
+Adds the last modified time and the user who made it to the admin interface, as well as a [last-modified] shortcode to use on the front-end.
 
 == Description ==
 
-This plugin adds information to the admin interface about when each post/page was last modified (including custom post types!).
+This plugin adds information to the admin interface about when each post/page was last modified and by whom (including custom post types!).
 
 Enhanced areas:
 
-1. Page/post admin tables - added `Last Modified` column which is also sortable.
+1. Page/post admin tables - added `Last Modified` column which is also sortable, showing the date, time and modifying user.
 1. Page/post edit screen (`post.php`) - added `Last modified on: *timestamp*` to `Publish` meta box.
 1. Admin messages after editing a page/post - ie: `Post updated. *timestamp* View Post`,
 
@@ -50,7 +50,7 @@ This plugin may be used to display the last modified date and time to a reader o
 
 **How to use the [last-modified] shortcode?**
 
-[last-modified] Returns the last modified timestamp in this format `date seperator time`.
+[last-modified] Returns the last modified timestamp in this format `date seperator time`. The modifying user is not included by default - see below.
 
 _Attributes (all optional)_
 
@@ -60,9 +60,27 @@ timef - specify a time format using the [PHP date format](http://www.php.net/man
 
 sep   - specify the character/text you want to use to separate the date & time.
 
-format - define the output format using placeholders `%date%`, `%time%`, and `%sep%`.  Other text can be used as well.
+authorf - define how the modifying user is rendered using the placeholder `%author%`.  Set it to an empty string to leave the user out entirely.
+
+format - define the output format using placeholders `%date%`, `%time%`, `%sep%`, and `%author%`.  Other text can be used as well.  `%author%` is not part of the shortcode's default format; add it to include the modifying user, ie: `[last-modified format="%date% %sep% %time% %author%"]`.
 
 
+
+**Who is shown as having last modified a post?**
+
+The user is read from the core `_edit_last` post meta, which WordPress writes when a post is saved from a wp-admin edit screen. Posts created or updated another way - through the REST API, WP-CLI, an importer or a cron job - have no such meta, so no user is shown for them. Nothing is shown either when the user who made the last edit has since been deleted.
+
+The user is only included in the three wp-admin contexts (`wp-table`, `publish-box` and `messages`), so that the shortcode and template tags do not publish the names of your editors on the front-end. To include the user on the front-end, add the `%author%` placeholder to the format you are using.
+
+To leave the user out of the output entirely, set `authorf` to an empty string:
+
+`function my_lmt_no_author( $d ) {
+
+	$d['base']['authorf'] = '';
+
+	return $d;
+}
+add_filter('last_modified_timestamp_defaults','my_lmt_no_author');`
 
 **How to change the outputted date/time format?**
 
@@ -75,6 +93,8 @@ To customize the output with a shortcode, use the attributes as described above.
 To customize the output in an admin context, a filter may be used.
 
 * **last_modified_timestamp_defaults** - allows default values to be filtered. Shortcode attributes override defaults when present, otherwise there are defaults for shortcode output as well.  Passes 1 parameter (array).
+* **last_modified_by_output** - allows the html for the modifying user to be filtered.  Passes 3 parameters (html, post id, display name).
+* **the_modified_author** - allows the display name of the modifying user to be filtered.  Passes 2 parameters (display name, post id).
 
 For example, if you wanted to change the time format in the admin messages that appear after a post is modified to a 24hr format with leading zeros, add this to your theme's functions.php:
 
@@ -108,6 +128,11 @@ Example array structure is: `array('datef' => 'M j, Y', 'timef' => 'g:i', 'sep' 
 1. Admin messages after editing a page/post - ie: `Post updated. *timestamp* View Post`
 
 == Changelog ==
+
+= 1.1.0 =
+* Merged in the `Last Modified By` plugin. The `Last Modified` column, the publish box and the admin messages now include the user who last modified the post. **Deactivate `Last Modified By` when upgrading, or the user will be shown twice.**
+* Added the `%author%` format placeholder and the `authorf` default/shortcode attribute. `%author%` is only in the default format for the wp-admin contexts, so front-end output is unchanged.
+* Added the `last_modified_by_output` and `the_modified_author` filters
 
 = 1.0.6 =
 * Fix notice about loading translations too early

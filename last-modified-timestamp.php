@@ -1,8 +1,8 @@
 <?php
 /*
 	Plugin Name: Last Modified Timestamp
-	Version: 1.0.6
-	Description: This plugin adds information to the admin interface about when each post/page was last modified (including custom post types!). Use the [last-modified] shortcode in your content!
+	Version: 1.1.0
+	Description: This plugin adds information to the admin interface about when each post/page was last modified, and by whom (including custom post types!). Use the [last-modified] shortcode in your content!
 	Text Domain: last-modified-timestamp
 	Author: Evan Mattson
 	Author URI: https://aaemnnost.tv/
@@ -64,28 +64,34 @@ class LastModifiedTimestamp
 		$defaults = array(
 			// base defaults
 			'base'     => array(
-				'datef'  => _x( 'M j, Y', 'default date format', 'last-modified-timestamp' ),
-				'timef'  => null,
-				'sep'    => _x( '@', 'default separator', 'last-modified-timestamp' ),
-				'format' => _x( '%date% %sep% %time%', 'default format', 'last-modified-timestamp' ),
+				'datef'   => _x( 'M j, Y', 'default date format', 'last-modified-timestamp' ),
+				'timef'   => null,
+				'sep'     => _x( '@', 'default separator', 'last-modified-timestamp' ),
+				'authorf' => _x( 'by %author%', 'default author format', 'last-modified-timestamp' ),
+				'format'  => _x( '%date% %sep% %time%', 'default format', 'last-modified-timestamp' ),
 			),
 			// extended contextual defaults
+			// %author% is only included in the wp-admin contexts, so that the shortcode
+			// and template tags don't publish editors' names on the front-end.
 			'contexts' => array(
 				'messages'    => array(
-					'datef' => _x( 'M j, Y', 'messages date format', 'last-modified-timestamp' ),
-					'sep'   => _x( '@', 'messages separator', 'last-modified-timestamp' ),
+					'datef'  => _x( 'M j, Y', 'messages date format', 'last-modified-timestamp' ),
+					'sep'    => _x( '@', 'messages separator', 'last-modified-timestamp' ),
+					'format' => _x( '%date% %sep% %time% %author%', 'messages format', 'last-modified-timestamp' ),
 				),
 				'publish-box' => array(
-					'datef' => _x( 'M j, Y', 'publish-box date format', 'last-modified-timestamp' ),
-					'sep'   => _x( '@', 'publish-box separator', 'last-modified-timestamp' ),
+					'datef'  => _x( 'M j, Y', 'publish-box date format', 'last-modified-timestamp' ),
+					'sep'    => _x( '@', 'publish-box separator', 'last-modified-timestamp' ),
+					'format' => _x( '%date% %sep% %time% %author%', 'publish-box format', 'last-modified-timestamp' ),
 				),
 				'shortcode'   => array(
 					'datef' => _x( 'M j, Y', 'shortcode date format', 'last-modified-timestamp' ),
 					'sep'   => _x( '@', 'shortcode separator', 'last-modified-timestamp' ),
 				),
 				'wp-table'    => array(
-					'datef' => _x( 'Y/m/d', 'wp-table date format', 'last-modified-timestamp' ),
-					'sep'   => _x( '<br />', 'wp-table separator', 'last-modified-timestamp' ),
+					'datef'  => _x( 'Y/m/d', 'wp-table date format', 'last-modified-timestamp' ),
+					'sep'    => _x( '<br />', 'wp-table separator', 'last-modified-timestamp' ),
+					'format' => _x( '%date% %sep% %time% %author%', 'wp-table format', 'last-modified-timestamp' ),
 				),
 			),
 		);
@@ -118,11 +124,20 @@ class LastModifiedTimestamp
 
 		extract( $data );
 
+		// Defaults filtered by code written before %author% existed may not define it.
+		if ( ! isset( $authorf ) )
+			$authorf = '';
+
+		$author = $this->construct_author( $authorf );
+
 		$timestamp = str_replace(
-			array( '%date%','%time%','%sep%' ),													// search
-			array( get_the_modified_date( $datef ), get_the_modified_time( $timef ), $sep ),	// replace
-			$format 																			// subject
+			array( '%date%','%time%','%sep%','%author%' ),											// search
+			array( get_the_modified_date( $datef ), get_the_modified_time( $timef ), $sep, $author ),	// replace
+			$format 																				// subject
 		);
+
+		// An unknown author leaves the space around its placeholder behind.
+		$timestamp = trim( preg_replace( '/[ \t]+/', ' ', $timestamp ) );
 
 		$timestamp = '<span class="last-modified-timestamp">' . $timestamp . '</span>';
 
@@ -135,8 +150,73 @@ class LastModifiedTimestamp
 	}
 
 	/**
+	 * Returns the formatted author of the last modification as a string,
+	 * or an empty string when the modifying user cannot be determined.
+	 * @param  string 	$authorf 		Author format. The placeholder is %author%.
+	 * @return string 	$author 		author html
+	 */
+	function construct_author( $authorf )
+	{
+		$post = get_post();
+
+		if ( ! $authorf || ! $post )
+			return '';
+
+		$author = $this->get_the_modified_author( $post->ID );
+
+		if ( ! $author )
+			return '';
+
+		$output = '<span class="last-modified-by">' . str_replace( '%author%', esc_html( $author ), $authorf ) . '</span>';
+
+		/**
+		 * filter 'last_modified_by_output'
+		 *
+		 * @param int 		$post_id 	- the post the author was resolved for
+		 * @param string 	$author 	- the display name of the last modifying user
+		 */
+		return apply_filters( 'last_modified_by_output', $output, $post->ID, $author );
+	}
+
+	/**
+	 * Returns the display name of the user who last modified the post.
+	 * Reads the core _edit_last meta, which WordPress only writes when a post is
+	 * saved through wp-admin - see the FAQ in readme.txt.
+	 * @param  int 		$post_id 		Defaults to the current post.
+	 * @return string 					display name, or an empty string if unknown
+	 */
+	function get_the_modified_author( $post_id = 0 )
+	{
+		$post = get_post( $post_id );
+
+		if ( ! $post )
+			return '';
+
+		$last_id = get_post_meta( $post->ID, '_edit_last', true );
+
+		if ( ! $last_id )
+			return '';
+
+		$user = get_userdata( $last_id );
+
+		// The user may have been deleted since the post was modified.
+		if ( ! $user )
+			return '';
+
+		/**
+		 * filter 'the_modified_author'
+		 *
+		 * Shares a name with the core filter of the same name so that code written
+		 * against the Last Modified By plugin keeps working.
+		 *
+		 * @param int $post_id  - the post the author was resolved for
+		 */
+		return apply_filters( 'the_modified_author', $user->display_name, $post->ID );
+	}
+
+	/**
 	 * Shortcode handler for [last-modified] shortcode
-	 * @param  array 	$atts 	Attributes array. possible attributes are 'datef', 'timef', 'sep' and 'format'.
+	 * @param  array 	$atts 	Attributes array. possible attributes are 'datef', 'timef', 'sep', 'authorf' and 'format'.
 	 *                       	All attributes are optional. Defaults can also be filtered.
 	 * @return string 			timestamp html
 	 */
@@ -204,7 +284,7 @@ class LastModifiedTimestamp
 	// Output CSS for width of new column
 	function print_admin_css()
 	{
-		echo '<style type="text/css">.fixed .column-last-modified{width:10%;}#message .last-modified-timestamp{font-weight:bold;}</style>'."\n";
+		echo '<style type="text/css">.fixed .column-last-modified{width:12%;}.column-last-modified .last-modified-by{display:block;}#message .last-modified-timestamp{font-weight:bold;}</style>'."\n";
 	}
 
 	public static function get_instance()
