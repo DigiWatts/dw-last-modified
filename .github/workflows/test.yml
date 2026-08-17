@@ -1,7 +1,13 @@
 name: Test
 
+# A pull request from a branch in this repository matches both `push` and
+# `pull_request`, which ran the whole matrix twice for every change. Limiting
+# the push trigger to main keeps one run per pull request, plus one on main
+# after a merge - which is the run release.yml cuts a release from.
 on:
   push:
+    branches:
+      - main
   pull_request:
 
 jobs:
