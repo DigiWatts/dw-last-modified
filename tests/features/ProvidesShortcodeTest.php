@@ -7,6 +7,6 @@ class ProvidesShortcodeTest extends WP_UnitTestCase
 	{
 		$output = do_shortcode('[last-modified]');
 
-		$this->assertContains('last-modified-timestamp', $output);
+		$this->assertStringContainsString('last-modified-timestamp', $output);
 	}
 }

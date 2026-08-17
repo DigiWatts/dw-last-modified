@@ -23,7 +23,7 @@ class PostEditScreenTest extends WP_UnitTestCase
 		$messages = apply_filters( 'post_updated_messages', $m );
 
 		foreach ($messages['post'] as $message) {
-			$this->assertContains('last-modified-timestamp', $message);
+			$this->assertStringContainsString('last-modified-timestamp', $message);
 		}
 	}
 
@@ -34,7 +34,7 @@ class PostEditScreenTest extends WP_UnitTestCase
 		do_action('post_submitbox_misc_actions', $this->factory->post->create_and_get());
 		$output = ob_get_clean();
 
-		$this->assertContains('last-modified-timestamp', $output);
+		$this->assertStringContainsString('last-modified-timestamp', $output);
 	}
 
 }

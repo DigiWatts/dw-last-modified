@@ -37,7 +37,7 @@ class ExposesFiltersTest extends WP_UnitTestCase
 		add_filter('last_modified_timestamp_output', function ($timestamp, $context) use ($test_case, &$called) {
 			$called = true;
 
-			$test_case->assertContains('last-modified-timestamp', $timestamp);
+			$test_case->assertStringContainsString('last-modified-timestamp', $timestamp);
 			$test_case->assertSame('some-context', $context);
 
 			return $timestamp;

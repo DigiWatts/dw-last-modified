@@ -7,7 +7,7 @@ class TemplateTagsTest extends WP_UnitTestCase
 	{
 		$output = get_the_last_modified_timestamp();
 
-		$this->assertContains('last-modified-timestamp', $output);
+		$this->assertStringContainsString('last-modified-timestamp', $output);
 	}
 
 	/** @test */
@@ -17,6 +17,6 @@ class TemplateTagsTest extends WP_UnitTestCase
 		the_last_modified_timestamp();
 		$output = ob_get_clean();
 
-		$this->assertContains('last-modified-timestamp', $output);
+		$this->assertStringContainsString('last-modified-timestamp', $output);
 	}
 }
