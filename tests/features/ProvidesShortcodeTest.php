@@ -3,10 +3,10 @@
 class ProvidesShortcodeTest extends WP_UnitTestCase
 {
 	/** @test */
-	function shortcode_returns_last_modified_timestamp()
+	function shortcode_returns_the_timestamp()
 	{
-		$output = do_shortcode('[last-modified]');
+		$output = do_shortcode('[dw-last-modified]');
 
-		$this->assertStringContainsString('last-modified-timestamp', $output);
+		$this->assertStringContainsString('dw-last-modified', $output);
 	}
 }

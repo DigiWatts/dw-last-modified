@@ -1,16 +1,27 @@
 <?php
 /*
-	Plugin Name: Last Modified Timestamp
-	Version: 1.1.0
-	Description: This plugin adds information to the admin interface about when each post/page was last modified, and by whom (including custom post types!). Use the [last-modified] shortcode in your content!
-	Text Domain: last-modified-timestamp
-	Author: Evan Mattson
-	Author URI: https://aaemnnost.tv/
-	Plugin URI: https://github.com/aaemnnosttv/last-modified-timestamp
+	Plugin Name: DW Last Modified
+	Version: 1.2.0
+	Description: Adds the last modified date, time and modifying user to the admin interface, including custom post types. Use the [dw-last-modified] shortcode in your content!
+	Text Domain: dw-last-modified
+	Author: Erik Mitchell
+	Author URI: https://erikmitchell.net
+	Plugin URI: https://github.com/DigiWatts/dw-last-modified
+	Update URI: https://github.com/DigiWatts/dw-last-modified
+	Requires at least: 4.6
+	Requires PHP: 7.2
+	License: GPL-2.0-or-later
+	License URI: https://www.gnu.org/licenses/gpl-2.0.html
 */
 
 /*
+	DW Last Modified began as a fork of Last Modified Timestamp by Evan Mattson
+	(https://github.com/aaemnnosttv/last-modified-timestamp) and has been
+	maintained independently by DigiWatts since version 1.1.0, which also merged
+	in the Last Modified By plugin (https://github.com/erikdmitchell/last-modified-by).
+
 	Copyright 2011-2013 Evan Mattson (email: me at aaemnnost dot tv)
+	Copyright 2026 Erik Mitchell / DigiWatts
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -27,8 +38,13 @@
     Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 */
 
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
 
-class LastModifiedTimestamp
+define( 'DW_LAST_MODIFIED_VERSION', '1.2.0' );
+
+class DWLastModified
 {
 	private static $instance;
 
@@ -39,7 +55,46 @@ class LastModifiedTimestamp
 		 */
 		add_action( 'init', array( $this, 'admin_actions' ) );
 
-		add_shortcode( 'last-modified',	array( $this, 'shortcode_handler' ) );
+		add_shortcode( 'dw-last-modified', array( $this, 'shortcode_handler' ) );
+
+		add_action( 'plugins_loaded', array( $this, 'register_legacy_api' ), 5 );
+	}
+
+	/**
+	 * Registers the pre-rename public API - shortcode, class name and template
+	 * tags - so code written against Last Modified Timestamp or Last Modified By
+	 * keeps working.
+	 *
+	 * Deferred to plugins_loaded rather than done at file load because the guards
+	 * below have to see every other plugin first. Declaring these eagerly would
+	 * fatal on "cannot redeclare" if the upstream plugin happened to load after
+	 * this one, which it does whenever its directory sorts later.
+	 *
+	 * @return void
+	 */
+	function register_legacy_api()
+	{
+		if ( ! shortcode_exists( 'last-modified' ) )
+			add_shortcode( 'last-modified', array( $this, 'shortcode_handler' ) );
+
+		if ( ! class_exists( 'LastModifiedTimestamp' ) )
+			class_alias( 'DWLastModified', 'LastModifiedTimestamp' );
+
+		if ( ! function_exists( 'get_the_last_modified_timestamp' ) )
+		{
+			function get_the_last_modified_timestamp( $context = null, $override = null )
+			{
+				return get_the_dw_last_modified( $context, $override );
+			}
+		}
+
+		if ( ! function_exists( 'the_last_modified_timestamp' ) )
+		{
+			function the_last_modified_timestamp( $context = null, $override = null )
+			{
+				the_dw_last_modified( $context, $override );
+			}
+		}
 	}
 
 	function admin_actions()
@@ -59,49 +114,70 @@ class LastModifiedTimestamp
 		}
 	}
 
+	/**
+	 * Applies a filter under its current name, then again under the name it had
+	 * before the plugin was renamed, so callbacks written against either keep
+	 * working. Extra arguments are passed through to both.
+	 * @param  string 	$name 			Current filter name.
+	 * @param  string 	$legacy_name 	Pre-1.2.0 filter name.
+	 * @param  mixed 	$value 			Value being filtered.
+	 * @return mixed 					filtered value
+	 */
+	protected function apply_filters_with_legacy( $name, $legacy_name, $value )
+	{
+		$args = array_slice( func_get_args(), 2 );
+
+		$value   = call_user_func_array( 'apply_filters', array_merge( array( $name ), $args ) );
+		$args[0] = $value;
+
+		return call_user_func_array( 'apply_filters', array_merge( array( $legacy_name ), $args ) );
+	}
+
 	function get_defaults( $context = null )
 	{
 		$defaults = array(
 			// base defaults
 			'base'     => array(
-				'datef'   => _x( 'M j, Y', 'default date format', 'last-modified-timestamp' ),
+				'datef'   => _x( 'M j, Y', 'default date format', 'dw-last-modified' ),
 				'timef'   => null,
-				'sep'     => _x( '@', 'default separator', 'last-modified-timestamp' ),
-				'authorf' => _x( 'by %author%', 'default author format', 'last-modified-timestamp' ),
-				'format'  => _x( '%date% %sep% %time%', 'default format', 'last-modified-timestamp' ),
+				'sep'     => _x( '@', 'default separator', 'dw-last-modified' ),
+				'authorf' => _x( 'by %author%', 'default author format', 'dw-last-modified' ),
+				'format'  => _x( '%date% %sep% %time%', 'default format', 'dw-last-modified' ),
 			),
 			// extended contextual defaults
 			// %author% is only included in the wp-admin contexts, so that the shortcode
 			// and template tags don't publish editors' names on the front-end.
 			'contexts' => array(
 				'messages'    => array(
-					'datef'  => _x( 'M j, Y', 'messages date format', 'last-modified-timestamp' ),
-					'sep'    => _x( '@', 'messages separator', 'last-modified-timestamp' ),
-					'format' => _x( '%date% %sep% %time% %author%', 'messages format', 'last-modified-timestamp' ),
+					'datef'  => _x( 'M j, Y', 'messages date format', 'dw-last-modified' ),
+					'sep'    => _x( '@', 'messages separator', 'dw-last-modified' ),
+					'format' => _x( '%date% %sep% %time% %author%', 'messages format', 'dw-last-modified' ),
 				),
 				'publish-box' => array(
-					'datef'  => _x( 'M j, Y', 'publish-box date format', 'last-modified-timestamp' ),
-					'sep'    => _x( '@', 'publish-box separator', 'last-modified-timestamp' ),
-					'format' => _x( '%date% %sep% %time% %author%', 'publish-box format', 'last-modified-timestamp' ),
+					'datef'  => _x( 'M j, Y', 'publish-box date format', 'dw-last-modified' ),
+					'sep'    => _x( '@', 'publish-box separator', 'dw-last-modified' ),
+					'format' => _x( '%date% %sep% %time% %author%', 'publish-box format', 'dw-last-modified' ),
 				),
 				'shortcode'   => array(
-					'datef' => _x( 'M j, Y', 'shortcode date format', 'last-modified-timestamp' ),
-					'sep'   => _x( '@', 'shortcode separator', 'last-modified-timestamp' ),
+					'datef' => _x( 'M j, Y', 'shortcode date format', 'dw-last-modified' ),
+					'sep'   => _x( '@', 'shortcode separator', 'dw-last-modified' ),
 				),
 				'wp-table'    => array(
-					'datef'  => _x( 'Y/m/d', 'wp-table date format', 'last-modified-timestamp' ),
-					'sep'    => _x( '<br />', 'wp-table separator', 'last-modified-timestamp' ),
-					'format' => _x( '%date% %sep% %time% %author%', 'wp-table format', 'last-modified-timestamp' ),
+					'datef'  => _x( 'Y/m/d', 'wp-table date format', 'dw-last-modified' ),
+					'sep'    => _x( '<br />', 'wp-table separator', 'dw-last-modified' ),
+					'format' => _x( '%date% %sep% %time% %author%', 'wp-table format', 'dw-last-modified' ),
 				),
 			),
 		);
 
 		/**
-		 * filter 'last_modified_timestamp_defaults'
+		 * filter 'dw_last_modified_defaults'
+		 *
+		 * Was 'last_modified_timestamp_defaults' before the rename; both are applied.
 		 *
 		 * @param mixed (null|string) $context  - the context the timestamp will be used in
 		 */
-		$defaults = apply_filters( 'last_modified_timestamp_defaults', $defaults, $context );
+		$defaults = $this->apply_filters_with_legacy( 'dw_last_modified_defaults', 'last_modified_timestamp_defaults', $defaults, $context );
 
 		if ( $context && isset( $defaults['contexts'][ $context ] ) )
 			return wp_parse_args( $defaults['contexts'][ $context ], $defaults['base'] );
@@ -139,14 +215,18 @@ class LastModifiedTimestamp
 		// An unknown author leaves the space around its placeholder behind.
 		$timestamp = trim( preg_replace( '/[ \t]+/', ' ', $timestamp ) );
 
-		$timestamp = '<span class="last-modified-timestamp">' . $timestamp . '</span>';
+		// The pre-rename class is kept alongside the current one so existing CSS
+		// targeting last-modified-timestamp still applies.
+		$timestamp = '<span class="dw-last-modified last-modified-timestamp">' . $timestamp . '</span>';
 
 		/**
-		 * filter 'last_modified_timestamp_output'
+		 * filter 'dw_last_modified_output'
+		 *
+		 * Was 'last_modified_timestamp_output' before the rename; both are applied.
 		 *
 		 * @param mixed (null|string) $context  - the context the timestamp will be used in
 		 */
-		return apply_filters( 'last_modified_timestamp_output', $timestamp, $context );
+		return $this->apply_filters_with_legacy( 'dw_last_modified_output', 'last_modified_timestamp_output', $timestamp, $context );
 	}
 
 	/**
@@ -167,15 +247,17 @@ class LastModifiedTimestamp
 		if ( ! $author )
 			return '';
 
-		$output = '<span class="last-modified-by">' . str_replace( '%author%', esc_html( $author ), $authorf ) . '</span>';
+		$output = '<span class="dw-last-modified-author last-modified-by">' . str_replace( '%author%', esc_html( $author ), $authorf ) . '</span>';
 
 		/**
-		 * filter 'last_modified_by_output'
+		 * filter 'dw_last_modified_author_output'
+		 *
+		 * Was 'last_modified_by_output' before the rename; both are applied.
 		 *
 		 * @param int 		$post_id 	- the post the author was resolved for
 		 * @param string 	$author 	- the display name of the last modifying user
 		 */
-		return apply_filters( 'last_modified_by_output', $output, $post->ID, $author );
+		return $this->apply_filters_with_legacy( 'dw_last_modified_author_output', 'last_modified_by_output', $output, $post->ID, $author );
 	}
 
 	/**
@@ -204,18 +286,19 @@ class LastModifiedTimestamp
 			return '';
 
 		/**
-		 * filter 'the_modified_author'
+		 * filter 'dw_last_modified_author'
 		 *
-		 * Shares a name with the core filter of the same name so that code written
-		 * against the Last Modified By plugin keeps working.
+		 * The legacy name 'the_modified_author' collides with the WordPress core
+		 * filter of the same name, which is why it was renamed. It is still
+		 * applied so code written against the Last Modified By plugin works.
 		 *
 		 * @param int $post_id  - the post the author was resolved for
 		 */
-		return apply_filters( 'the_modified_author', $user->display_name, $post->ID );
+		return $this->apply_filters_with_legacy( 'dw_last_modified_author', 'the_modified_author', $user->display_name, $post->ID );
 	}
 
 	/**
-	 * Shortcode handler for [last-modified] shortcode
+	 * Shortcode handler for the [dw-last-modified] shortcode
 	 * @param  array 	$atts 	Attributes array. possible attributes are 'datef', 'timef', 'sep', 'authorf' and 'format'.
 	 *                       	All attributes are optional. Defaults can also be filtered.
 	 * @return string 			timestamp html
@@ -253,17 +336,17 @@ class LastModifiedTimestamp
 		return $messages;
 	}
 
-	// Add the Last Modified timestamp to the 'Publish' meta box in post.php
+	// Add the last modified timestamp to the 'Publish' meta box in post.php
 	function publish_box()
 	{
-		$timestamp = sprintf( __('Last modified on: <strong>%1$s</strong>', 'last-modified-timestamp'), $this->construct_timestamp('publish-box') );
+		$timestamp = sprintf( __('Last modified on: <strong>%1$s</strong>', 'dw-last-modified'), $this->construct_timestamp('publish-box') );
 		echo '<div class="misc-pub-section misc-pub-section-last">' . $timestamp . '</div>';
 	}
 
 	// Append the new column to the columns array
 	function column_heading( $columns )
 	{
-		$columns['last-modified'] = _x('Last Modified', 'column heading', 'last-modified-timestamp');
+		$columns['last-modified'] = _x('Last Modified', 'column heading', 'dw-last-modified');
 		return $columns;
 	}
 
@@ -284,7 +367,7 @@ class LastModifiedTimestamp
 	// Output CSS for width of new column
 	function print_admin_css()
 	{
-		echo '<style type="text/css">.fixed .column-last-modified{width:12%;}.column-last-modified .last-modified-by{display:block;}#message .last-modified-timestamp{font-weight:bold;}</style>'."\n";
+		echo '<style type="text/css">.fixed .column-last-modified{width:12%;}.column-last-modified .dw-last-modified-author{display:block;}#message .dw-last-modified{font-weight:bold;}</style>'."\n";
 	}
 
 	public static function get_instance()
@@ -295,17 +378,17 @@ class LastModifiedTimestamp
 		return self::$instance;
 	}
 
-} // LastModifiedTimestamp
+} // DWLastModified
 
-function get_the_last_modified_timestamp( $context = null, $override = null )
+function get_the_dw_last_modified( $context = null, $override = null )
 {
-	return LastModifiedTimestamp::get_instance()->construct_timestamp( $context, $override );
+	return DWLastModified::get_instance()->construct_timestamp( $context, $override );
 }
 
-function the_last_modified_timestamp( $context = null, $override = null )
+function the_dw_last_modified( $context = null, $override = null )
 {
-	echo get_the_last_modified_timestamp( $context, $override );
+	echo get_the_dw_last_modified( $context, $override );
 }
 
 //	MAKE IT SO.
-LastModifiedTimestamp::get_instance();
+DWLastModified::get_instance();

@@ -24,7 +24,7 @@ class AdminListTableColumnTest extends WP_UnitTestCase
 		do_action("manage_{$post_type}_posts_custom_column", 'last-modified', $post_id);
 		$output = ob_get_clean();
 
-		$this->assertStringContainsString('last-modified-timestamp', $output);
+		$this->assertStringContainsString('dw-last-modified', $output);
 	}
 
 	/**

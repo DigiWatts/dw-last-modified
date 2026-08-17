@@ -26,9 +26,9 @@ class IncludesModifiedAuthorTest extends WP_UnitTestCase
 		$this->given_a_post_modified_by('Erik Mitchell');
 
 		foreach (array('wp-table', 'publish-box', 'messages') as $context) {
-			$output = get_the_last_modified_timestamp($context);
+			$output = get_the_dw_last_modified($context);
 
-			$this->assertStringContainsString('last-modified-by', $output, "context: $context");
+			$this->assertStringContainsString('dw-last-modified-author', $output, "context: $context");
 			$this->assertStringContainsString('by Erik Mitchell', $output, "context: $context");
 		}
 	}
@@ -67,9 +67,9 @@ class IncludesModifiedAuthorTest extends WP_UnitTestCase
 	{
 		$this->given_a_post_modified_by('Erik Mitchell');
 
-		$this->assertStringNotContainsString('Erik Mitchell', get_the_last_modified_timestamp());
-		$this->assertStringNotContainsString('Erik Mitchell', get_the_last_modified_timestamp('shortcode'));
-		$this->assertStringNotContainsString('Erik Mitchell', do_shortcode('[last-modified]'));
+		$this->assertStringNotContainsString('Erik Mitchell', get_the_dw_last_modified());
+		$this->assertStringNotContainsString('Erik Mitchell', get_the_dw_last_modified('shortcode'));
+		$this->assertStringNotContainsString('Erik Mitchell', do_shortcode('[dw-last-modified]'));
 	}
 
 	/** @test */
@@ -77,7 +77,7 @@ class IncludesModifiedAuthorTest extends WP_UnitTestCase
 	{
 		$this->given_a_post_modified_by('Erik Mitchell');
 
-		$output = do_shortcode('[last-modified format="%date% %author%"]');
+		$output = do_shortcode('[dw-last-modified format="%date% %author%"]');
 
 		$this->assertStringContainsString('by Erik Mitchell', $output);
 	}
@@ -87,7 +87,7 @@ class IncludesModifiedAuthorTest extends WP_UnitTestCase
 	{
 		$this->given_a_post_modified_by('<script>alert(1)</script>');
 
-		$output = get_the_last_modified_timestamp('wp-table');
+		$output = get_the_dw_last_modified('wp-table');
 
 		$this->assertStringNotContainsString('<script>', $output);
 	}
@@ -97,10 +97,10 @@ class IncludesModifiedAuthorTest extends WP_UnitTestCase
 	{
 		$GLOBALS['post'] = $this->factory->post->create_and_get();
 
-		$output = get_the_last_modified_timestamp('wp-table');
+		$output = get_the_dw_last_modified('wp-table');
 
-		$this->assertStringContainsString('last-modified-timestamp', $output);
-		$this->assertStringNotContainsString('last-modified-by', $output);
+		$this->assertStringContainsString('dw-last-modified', $output);
+		$this->assertStringNotContainsString('dw-last-modified-author', $output);
 	}
 
 	/** @test */
@@ -110,9 +110,9 @@ class IncludesModifiedAuthorTest extends WP_UnitTestCase
 		update_post_meta($post_id, '_edit_last', 987654321);
 		$GLOBALS['post'] = get_post($post_id);
 
-		$output = get_the_last_modified_timestamp('wp-table');
+		$output = get_the_dw_last_modified('wp-table');
 
-		$this->assertStringNotContainsString('last-modified-by', $output);
+		$this->assertStringNotContainsString('dw-last-modified-author', $output);
 	}
 
 	/** @test */
@@ -120,7 +120,7 @@ class IncludesModifiedAuthorTest extends WP_UnitTestCase
 	{
 		$GLOBALS['post'] = $this->factory->post->create_and_get();
 
-		$output = get_the_last_modified_timestamp('wp-table');
+		$output = get_the_dw_last_modified('wp-table');
 
 		$this->assertStringNotContainsString(' </span>', $output);
 	}
@@ -130,7 +130,7 @@ class IncludesModifiedAuthorTest extends WP_UnitTestCase
 	{
 		$this->given_a_post_modified_by('Erik Mitchell');
 
-		$output = get_the_last_modified_timestamp('wp-table', array('authorf' => 'edited by %author%'));
+		$output = get_the_dw_last_modified('wp-table', array('authorf' => 'edited by %author%'));
 
 		$this->assertStringContainsString('edited by Erik Mitchell', $output);
 	}
@@ -140,7 +140,7 @@ class IncludesModifiedAuthorTest extends WP_UnitTestCase
 	{
 		$this->given_a_post_modified_by('Erik Mitchell');
 
-		$output = get_the_last_modified_timestamp('wp-table', array('authorf' => ''));
+		$output = get_the_dw_last_modified('wp-table', array('authorf' => ''));
 
 		$this->assertStringNotContainsString('Erik Mitchell', $output);
 	}
@@ -152,17 +152,17 @@ class IncludesModifiedAuthorTest extends WP_UnitTestCase
 		$test_case = $this;
 		$called = false;
 
-		add_filter('last_modified_by_output', function ($output, $filtered_post_id, $author) use ($test_case, $post_id, &$called) {
+		add_filter('dw_last_modified_author_output', function ($output, $filtered_post_id, $author) use ($test_case, $post_id, &$called) {
 			$called = true;
 
-			$test_case->assertStringContainsString('last-modified-by', $output);
+			$test_case->assertStringContainsString('dw-last-modified-author', $output);
 			$test_case->assertEquals($post_id, $filtered_post_id);
 			$test_case->assertSame('Erik Mitchell', $author);
 
 			return 'the-replaced-author';
 		}, 10, 3);
 
-		$output = get_the_last_modified_timestamp('wp-table');
+		$output = get_the_dw_last_modified('wp-table');
 
 		if (! $called) {
 			$this->fail();
@@ -176,11 +176,11 @@ class IncludesModifiedAuthorTest extends WP_UnitTestCase
 	{
 		$this->given_a_post_modified_by('Erik Mitchell');
 
-		add_filter('the_modified_author', function () {
+		add_filter('dw_last_modified_author', function () {
 			return 'Someone Else';
 		});
 
-		$output = get_the_last_modified_timestamp('wp-table');
+		$output = get_the_dw_last_modified('wp-table');
 
 		$this->assertStringContainsString('by Someone Else', $output);
 	}
@@ -194,15 +194,15 @@ class IncludesModifiedAuthorTest extends WP_UnitTestCase
 	{
 		$this->given_a_post_modified_by('Erik Mitchell');
 
-		add_filter('last_modified_timestamp_defaults', function ($defaults) {
+		add_filter('dw_last_modified_defaults', function ($defaults) {
 			unset($defaults['base']['authorf']);
 
 			return $defaults;
 		});
 
-		$output = get_the_last_modified_timestamp('wp-table');
+		$output = get_the_dw_last_modified('wp-table');
 
-		$this->assertStringContainsString('last-modified-timestamp', $output);
-		$this->assertStringNotContainsString('last-modified-by', $output);
+		$this->assertStringContainsString('dw-last-modified', $output);
+		$this->assertStringNotContainsString('dw-last-modified-author', $output);
 	}
 }

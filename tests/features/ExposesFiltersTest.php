@@ -8,7 +8,7 @@ class ExposesFiltersTest extends WP_UnitTestCase
 		$test_case = $this;
 		$called = false;
 
-		add_filter('last_modified_timestamp_defaults', function ($all_defaults, $context) use ($test_case, &$called) {
+		add_filter('dw_last_modified_defaults', function ($all_defaults, $context) use ($test_case, &$called) {
 			$called = true;
 
 			$test_case->assertTrue(isset($all_defaults['base']));
@@ -21,7 +21,7 @@ class ExposesFiltersTest extends WP_UnitTestCase
 			return $all_defaults;
 		}, 10, 2);
 
-		get_the_last_modified_timestamp('some-context');
+		get_the_dw_last_modified('some-context');
 
 		if (! $called) {
 			$this->fail();
@@ -34,16 +34,16 @@ class ExposesFiltersTest extends WP_UnitTestCase
 		$test_case = $this;
 		$called = false;
 
-		add_filter('last_modified_timestamp_output', function ($timestamp, $context) use ($test_case, &$called) {
+		add_filter('dw_last_modified_output', function ($timestamp, $context) use ($test_case, &$called) {
 			$called = true;
 
-			$test_case->assertStringContainsString('last-modified-timestamp', $timestamp);
+			$test_case->assertStringContainsString('dw-last-modified', $timestamp);
 			$test_case->assertSame('some-context', $context);
 
 			return $timestamp;
 		}, 10, 2);
 
-		get_the_last_modified_timestamp('some-context');
+		get_the_dw_last_modified('some-context');
 
 		if (! $called) {
 			$this->fail();

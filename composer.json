@@ -1,22 +1,32 @@
 {
-    "name": "aaemnnosttv/last-modified-timestamp",
-    "description": "A WordPress plugin for making the last modified date/time more accessible.",
+    "name": "digiwatts/dw-last-modified",
+    "description": "A WordPress plugin for making the last modified date, time and modifying user more accessible.",
     "type": "wordpress-plugin",
+    "homepage": "https://github.com/DigiWatts/dw-last-modified",
     "require": {
-        "php": ">=5.3",
-        "composer/installers": "^1.2"
+        "php": ">=7.2",
+        "composer/installers": "^1.2 || ^2.0"
     },
     "require-dev": {
         "phpunit/phpunit": "^7 || ^9",
         "yoast/phpunit-polyfills": "^1.1"
     },
-    "license": "GPL-2.0",
+    "license": "GPL-2.0-or-later",
     "authors": [
         {
+            "name": "Erik Mitchell",
+            "homepage": "https://erikmitchell.net",
+            "role": "Maintainer"
+        },
+        {
             "name": "Evan Mattson",
-            "email": "me@aaemnnost.tv"
+            "email": "me@aaemnnost.tv",
+            "role": "Original author of Last Modified Timestamp, which this plugin forked"
         }
     ],
+    "support": {
+        "issues": "https://github.com/DigiWatts/dw-last-modified/issues"
+    },
     "config": {
         "allow-plugins": {
             "composer/installers": true
