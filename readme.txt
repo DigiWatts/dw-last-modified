@@ -3,7 +3,7 @@ Stable tag: 1.2.0
 Contributors: erikdmitchell
 Tags: page modified, post modified, updated at, last modified, modified by
 Requires at least: 4.6
-Requires PHP: 7.2
+Requires PHP: 7.4
 Tested up to: 6.8.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
