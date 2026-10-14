@@ -122,11 +122,12 @@ Models the function naming convention used by WordPress for `get_the_content` / 
 * `get_the_dw_last_modified()` - returns the timestamp.
 * `the_dw_last_modified()` - displays/echos the timestamp.
 
-These functions accept 2 arguments, both are optional:
+These functions accept 3 arguments, all optional:
 
 * `$context` (string) to output formatted according to a defined context (ie: admin messages, posts table, etc.)
 * `$override` (array) using this will override any defaults that are specified here, but output can still be overriden at final output.
 Example array structure is: `array('datef' => 'M j, Y', 'timef' => 'g:i', 'sep' => '&rarr;', 'format' => '%date% %sep% %time%')`
+* `$post` (int|WP_Post) the post to show the timestamp for. Defaults to the current post, so outside the Loop pass one explicitly.
 
 == Changelog ==
 

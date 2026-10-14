@@ -48,6 +48,12 @@ class DWLastModified
 {
 	private static $instance;
 
+	/**
+	 * @var array Post IDs whose modifying users have already been loaded into the
+	 *            user cache, as keys.
+	 */
+	private $primed_authors = array();
+
 	protected function __construct()
 	{
 		/**
@@ -88,17 +94,17 @@ class DWLastModified
 
 		if ( ! function_exists( 'get_the_last_modified_timestamp' ) )
 		{
-			function get_the_last_modified_timestamp( $context = null, $override = null )
+			function get_the_last_modified_timestamp( $context = null, $override = null, $post = null )
 			{
-				return get_the_dw_last_modified( $context, $override );
+				return get_the_dw_last_modified( $context, $override, $post );
 			}
 		}
 
 		if ( ! function_exists( 'the_last_modified_timestamp' ) )
 		{
-			function the_last_modified_timestamp( $context = null, $override = null )
+			function the_last_modified_timestamp( $context = null, $override = null, $post = null )
 			{
-				the_dw_last_modified( $context, $override );
+				the_dw_last_modified( $context, $override, $post );
 			}
 		}
 	}
@@ -129,14 +135,11 @@ class DWLastModified
 	 * @param  mixed 	$value 			Value being filtered.
 	 * @return mixed 					filtered value
 	 */
-	protected function apply_filters_with_legacy( $name, $legacy_name, $value )
+	protected function apply_filters_with_legacy( $name, $legacy_name, $value, ...$args )
 	{
-		$args = array_slice( func_get_args(), 2 );
+		$value = apply_filters( $name, $value, ...$args );
 
-		$value   = call_user_func_array( 'apply_filters', array_merge( array( $name ), $args ) );
-		$args[0] = $value;
-
-		return call_user_func_array( 'apply_filters', array_merge( array( $legacy_name ), $args ) );
+		return apply_filters( $legacy_name, $value, ...$args );
 	}
 
 	function get_defaults( $context = null )
@@ -195,10 +198,12 @@ class DWLastModified
 	 * Returns a formatted timestamp as a string
 	 * @param  string 	$context 		Defines what defaults are to be used to build the timestamp.
 	 * @param  array  	$override 		Used by shortcode to pass per-instance values
+	 * @param  int|WP_Post 	$post 		Post to use. Defaults to the current post.
 	 * @return string 	$timestramp		timestamp html
 	 */
-	function construct_timestamp( $context = null, $override = null )
+	function construct_timestamp( $context = null, $override = null, $post = null )
 	{
+		$post = get_post( $post );
 		$data = $this->get_defaults( $context );
 
 		if ( $override && is_array( $override ) )
@@ -215,12 +220,12 @@ class DWLastModified
 			'format'  => '',
 		) );
 
-		$author = $this->construct_author( $data['authorf'] );
+		$author = $this->construct_author( $data['authorf'], $post );
 
 		$timestamp = str_replace(
-			array( '%date%','%time%','%sep%','%author%' ),																// search
-			array( get_the_modified_date( $data['datef'] ), get_the_modified_time( $data['timef'] ), $data['sep'], $author ),	// replace
-			$data['format'] 																							// subject
+			array( '%date%','%time%','%sep%','%author%' ),																				// search
+			array( get_the_modified_date( $data['datef'], $post ), get_the_modified_time( $data['timef'], $post ), $data['sep'], $author ),	// replace
+			$data['format'] 																											// subject
 		);
 
 		// An unknown author leaves the space around its placeholder behind.
@@ -244,11 +249,12 @@ class DWLastModified
 	 * Returns the formatted author of the last modification as a string,
 	 * or an empty string when the modifying user cannot be determined.
 	 * @param  string 	$authorf 		Author format. The placeholder is %author%.
+	 * @param  int|WP_Post 	$post 		Post to use. Defaults to the current post.
 	 * @return string 	$author 		author html
 	 */
-	function construct_author( $authorf )
+	function construct_author( $authorf, $post = null )
 	{
-		$post = get_post();
+		$post = get_post( $post );
 
 		if ( ! $authorf || ! $post )
 			return '';
@@ -407,8 +413,63 @@ class DWLastModified
 	// Put the last modified date in the content area
 	function column_content( $column_name, $id )
 	{
-		if ( 'last-modified' == $column_name )
-			echo $this->construct_timestamp('wp-table');
+		if ( 'last-modified' != $column_name )
+			return;
+
+		$this->prime_modified_authors( $id );
+
+		echo $this->construct_timestamp( 'wp-table', null, $id );
+	}
+
+	/**
+	 * Loads the modifying user of every post in the list table into the cache in
+	 * one go, the first time one of its rows is rendered. Otherwise each row
+	 * costs its own user and user-meta queries.
+	 *
+	 * Only full post objects are batched. For hierarchical post types core loads
+	 * every post of the type as bare id/parent pairs, not just the current page,
+	 * and priming all of those would cost more than it saves.
+	 *
+	 * @param  int 		$id 	Post being rendered.
+	 * @return void
+	 */
+	protected function prime_modified_authors( $id )
+	{
+		if ( isset( $this->primed_authors[ $id ] ) )
+			return;
+
+		global $wp_query;
+
+		$ids = array( (int) $id );
+
+		if ( $wp_query instanceof WP_Query && is_array( $wp_query->posts ) )
+		{
+			foreach ( $wp_query->posts as $post )
+			{
+				if ( $post instanceof WP_Post && ! isset( $this->primed_authors[ $post->ID ] ) )
+					$ids[] = $post->ID;
+			}
+		}
+
+		$ids = array_unique( $ids );
+
+		// Normally already cached by WP_Query, in which case this doesn't query.
+		update_meta_cache( 'post', $ids );
+
+		$user_ids = array();
+
+		foreach ( $ids as $post_id )
+		{
+			$this->primed_authors[ $post_id ] = true;
+
+			$user_id = (int) get_post_meta( $post_id, '_edit_last', true );
+
+			if ( $user_id )
+				$user_ids[] = $user_id;
+		}
+
+		if ( $user_ids )
+			cache_users( array_unique( $user_ids ) );
 	}
 
 	// Register the column as sortable
@@ -939,14 +1000,14 @@ class DWLastModifiedUpdater
 
 } // DWLastModifiedUpdater
 
-function get_the_dw_last_modified( $context = null, $override = null )
+function get_the_dw_last_modified( $context = null, $override = null, $post = null )
 {
-	return DWLastModified::get_instance()->construct_timestamp( $context, $override );
+	return DWLastModified::get_instance()->construct_timestamp( $context, $override, $post );
 }
 
-function the_dw_last_modified( $context = null, $override = null )
+function the_dw_last_modified( $context = null, $override = null, $post = null )
 {
-	echo get_the_dw_last_modified( $context, $override );
+	echo get_the_dw_last_modified( $context, $override, $post );
 }
 
 //	MAKE IT SO.
