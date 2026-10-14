@@ -1,14 +1,14 @@
 <?php
 /*
 	Plugin Name: DW Last Modified
-	Version: 1.5.0
+	Version: 1.5.1
 	Description: Adds the last modified date, time and modifying user to the admin interface, including custom post types. Use the [dw-last-modified] shortcode in your content!
 	Text Domain: dw-last-modified
 	Author: Erik Mitchell
 	Author URI: https://erikmitchell.net
 	Plugin URI: https://github.com/DigiWatts/dw-last-modified
 	Update URI: https://github.com/DigiWatts/dw-last-modified
-	Requires at least: 4.6
+	Requires at least: 5.8
 	Requires PHP: 7.4
 	License: GPL-2.0-or-later
 	License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -42,7 +42,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'DW_LAST_MODIFIED_VERSION', '1.5.0' );
+define( 'DW_LAST_MODIFIED_VERSION', '1.5.1' );
 
 class DWLastModified
 {
@@ -51,9 +51,15 @@ class DWLastModified
 	protected function __construct()
 	{
 		/**
-		 * Init actions
+		 * Admin actions
+		 *
+		 * Registered on admin_init rather than init so that the front-end never
+		 * pays for them, and so that every post type is registered by the time the
+		 * per-type column hooks are added - including ones registered on init at a
+		 * later priority. admin_init also fires for admin-ajax.php, which Quick
+		 * Edit uses to re-render the list-table row.
 		 */
-		add_action( 'init', array( $this, 'admin_actions' ) );
+		add_action( 'admin_init', array( $this, 'admin_actions' ) );
 
 		add_shortcode( 'dw-last-modified', array( $this, 'shortcode_handler' ) );
 
@@ -110,7 +116,7 @@ class DWLastModified
 		{
 			add_filter( "manage_{$pt}_posts_columns",			array( $this, 'column_heading' ), 10, 1 );
 			add_action( "manage_{$pt}_posts_custom_column",		array( $this, 'column_content' ), 10, 2 );
-			add_action( "manage_edit-{$pt}_sortable_columns",	array( $this, 'column_sort'    ), 10, 2 );
+			add_filter( "manage_edit-{$pt}_sortable_columns",	array( $this, 'column_sort'    ) );
 		}
 	}
 
@@ -311,7 +317,12 @@ class DWLastModified
 	function shortcode_handler( $atts = array() )
 	{
 		$atts = shortcode_atts( $this->get_defaults('shortcode'), $atts );
-		return $this->construct_timestamp('shortcode', $atts);
+
+		// Attributes come from post content, which users without unfiltered_html
+		// can write. Core's shortcode parser unescapes sequences like \x3c, so
+		// markup can reach the output even though kses has already run on the
+		// content - it has to be filtered again here.
+		return wp_kses_post( $this->construct_timestamp('shortcode', $atts) );
 	}
 
 	/**
@@ -327,18 +338,56 @@ class DWLastModified
 		{
 			foreach ( $array as $index => &$msg )
 			{
-				if ( false !== $entry_point = strpos( $msg, '.' ) )
-				{
-					$first_half  = substr( $msg, 0, $entry_point+1 );
-					$second_half = substr( $msg, strlen( $first_half ));
-					$msg       = "$first_half $timestamp. $second_half";
-				}
+				$msg         = (string) $msg;
+				$entry_point = $this->find_message_end( $msg );
+
+				if ( false !== $entry_point )
+					$msg = substr( $msg, 0, $entry_point+1 ) . " $timestamp." . substr( $msg, $entry_point+1 );
 				else
 					$msg = "$timestamp: $msg";
 			}
 		}
 
 		return $messages;
+	}
+
+	/**
+	 * Finds the full stop that ends the message itself, ahead of any trailing
+	 * "View post" / "Preview post" link.
+	 *
+	 * That is the last full stop before the first link, and only one that is
+	 * outside every element - dates in the message, like the scheduled date in
+	 * <strong>, can themselves contain full stops (14.10.2026, 14. Oktober).
+	 *
+	 * @param  string 		$msg 	Message HTML.
+	 * @return int|false 			Offset of the full stop, or false if there is none.
+	 */
+	protected function find_message_end( $msg )
+	{
+		$link = stripos( $msg, '<a ' );
+		$head = ( false === $link ) ? $msg : substr( $msg, 0, $link );
+
+		$void   = array( 'br', 'hr', 'img', 'wbr' );
+		$depth  = 0;
+		$offset = 0;
+		$found  = false;
+
+		foreach ( preg_split( '/(<[^>]*>)/', $head, -1, PREG_SPLIT_DELIM_CAPTURE ) as $part )
+		{
+			if ( preg_match( '#^<(/?)([a-z0-9]+)#i', $part, $tag ) )
+			{
+				if ( '/' === $tag[1] )
+					$depth = max( 0, $depth - 1 );
+				elseif ( ! in_array( strtolower( $tag[2] ), $void, true ) && '/>' !== substr( $part, -2 ) )
+					$depth++;
+			}
+			elseif ( 0 === $depth && false !== ( $dot = strrpos( $part, '.' ) ) )
+				$found = $offset + $dot;
+
+			$offset += strlen( $part );
+		}
+
+		return $found;
 	}
 
 	// Add the last modified timestamp to the 'Publish' meta box in post.php

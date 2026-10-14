@@ -1,8 +1,8 @@
 === DW Last Modified ===
-Stable tag: 1.5.0
+Stable tag: 1.5.1
 Contributors: erikdmitchell
 Tags: page modified, post modified, updated at, last modified, modified by
-Requires at least: 4.6
+Requires at least: 5.8
 Requires PHP: 7.4
 Tested up to: 6.8.2
 License: GPLv2 or later
