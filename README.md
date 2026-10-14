@@ -21,6 +21,7 @@ The plugin header sets `Update URI`, which stops WordPress core from offering an
 // Template tags.
 the_dw_last_modified();
 $html = get_the_dw_last_modified( 'wp-table' );
+$html = get_the_dw_last_modified( null, null, $post_id ); // Outside the Loop.
 ```
 
 ```
