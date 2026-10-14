@@ -3,6 +3,17 @@
 class AdminListTableColumnTest extends WP_UnitTestCase
 {
 	/**
+	 * The admin hooks are registered on admin_init, which the test bootstrap
+	 * doesn't fire.
+	 */
+	function set_up()
+	{
+		parent::set_up();
+
+		DWLastModified::get_instance()->admin_actions();
+	}
+
+	/**
 	 * @test
 	 * @dataProvider provide_all_post_types
 	 */
@@ -36,6 +47,15 @@ class AdminListTableColumnTest extends WP_UnitTestCase
 		$sortable = apply_filters("manage_edit-{$post_type}_sortable_columns", array());
 
 		$this->assertArrayHasKey('last-modified', $sortable);
+	}
+
+	/** @test */
+	function registers_admin_hooks_on_admin_init_rather_than_init()
+	{
+		$instance = DWLastModified::get_instance();
+
+		$this->assertSame(10, has_action('admin_init', array($instance, 'admin_actions')));
+		$this->assertFalse(has_action('init', array($instance, 'admin_actions')));
 	}
 
 	function provide_all_post_types()

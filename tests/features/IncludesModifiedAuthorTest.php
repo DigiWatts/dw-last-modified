@@ -3,6 +3,17 @@
 class IncludesModifiedAuthorTest extends WP_UnitTestCase
 {
 	/**
+	 * The admin hooks are registered on admin_init, which the test bootstrap
+	 * doesn't fire.
+	 */
+	function set_up()
+	{
+		parent::set_up();
+
+		DWLastModified::get_instance()->admin_actions();
+	}
+
+	/**
 	 * Creates a post whose last modification is attributed to a user with the
 	 * given display name, and makes it the current post.
 	 * @param  string 	$display_name
