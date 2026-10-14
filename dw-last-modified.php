@@ -198,18 +198,23 @@ class DWLastModified
 		if ( $override && is_array( $override ) )
 			$data = wp_parse_args( $override, $data );
 
-		extract( $data );
+		// Filtered defaults may leave keys out - authorf in particular, which code
+		// written before %author% existed doesn't know about. An empty date or
+		// time format falls back to the site's own.
+		$data = wp_parse_args( $data, array(
+			'datef'   => '',
+			'timef'   => '',
+			'sep'     => '',
+			'authorf' => '',
+			'format'  => '',
+		) );
 
-		// Defaults filtered by code written before %author% existed may not define it.
-		if ( ! isset( $authorf ) )
-			$authorf = '';
-
-		$author = $this->construct_author( $authorf );
+		$author = $this->construct_author( $data['authorf'] );
 
 		$timestamp = str_replace(
-			array( '%date%','%time%','%sep%','%author%' ),											// search
-			array( get_the_modified_date( $datef ), get_the_modified_time( $timef ), $sep, $author ),	// replace
-			$format 																				// subject
+			array( '%date%','%time%','%sep%','%author%' ),																// search
+			array( get_the_modified_date( $data['datef'] ), get_the_modified_time( $data['timef'] ), $data['sep'], $author ),	// replace
+			$data['format'] 																							// subject
 		);
 
 		// An unknown author leaves the space around its placeholder behind.
@@ -591,8 +596,12 @@ class DWLastModifiedUpdater
 	}
 
 	/**
-	 * Drops the cached release once an update has run, so that the plugins screen
-	 * stops offering a version which is now installed.
+	 * Drops the cached release once this plugin has been updated, so that the
+	 * plugins screen stops offering a version which is now installed.
+	 *
+	 * Core reports a single update (including auto-updates) under `plugin`, and
+	 * a bulk update under `plugins`.
+	 *
 	 * @param  WP_Upgrader 	$upgrader 		The upgrader that ran.
 	 * @param  array 		$hook_extra 	Details of what was upgraded.
 	 * @return void
@@ -605,6 +614,22 @@ class DWLastModifiedUpdater
 		if ( 'update' !== $hook_extra['action'] || 'plugin' !== $hook_extra['type'] )
 			return;
 
+		$updated = isset( $hook_extra['plugins'] ) ? (array) $hook_extra['plugins'] : array();
+
+		if ( isset( $hook_extra['plugin'] ) )
+			$updated[] = $hook_extra['plugin'];
+
+		if ( in_array( $this->basename, $updated, true ) )
+			self::clear_cache();
+	}
+
+	/**
+	 * Drops the cached release. Also run on deactivation, so that nothing is
+	 * left behind in the database.
+	 * @return void
+	 */
+	public static function clear_cache()
+	{
 		delete_site_transient( self::CACHE_KEY );
 	}
 
@@ -685,6 +710,11 @@ class DWLastModifiedUpdater
 
 	/**
 	 * Finds the download URL of the built plugin zip among a release's assets.
+	 *
+	 * The URL has to point at this repository's release downloads. Core installs
+	 * whatever package it is handed, so anything else is refused rather than
+	 * trusted just because the API response named it.
+	 *
 	 * @param  array 		$assets 	Assets as returned by the API.
 	 * @return string|false 			Download URL, or false when absent.
 	 */
@@ -693,10 +723,17 @@ class DWLastModifiedUpdater
 		if ( ! is_array( $assets ) )
 			return false;
 
+		$prefix = 'https://github.com/' . self::REPO . '/releases/download/';
+
 		foreach ( $assets as $asset )
 		{
-			if ( isset( $asset['name'], $asset['browser_download_url'] ) && self::ASSET === $asset['name'] )
-				return $asset['browser_download_url'];
+			if ( ! isset( $asset['name'], $asset['browser_download_url'] ) || self::ASSET !== $asset['name'] )
+				continue;
+
+			$url = (string) $asset['browser_download_url'];
+
+			if ( 0 === strpos( $url, $prefix ) )
+				return $url;
 		}
 
 		return false;
@@ -834,13 +871,21 @@ class DWLastModifiedUpdater
 	 * Whether this request is the "Check again" button on the updates screen.
 	 *
 	 * Core does not pass that intent through to the update filters, so the
-	 * request itself has to be inspected in order to bypass the cache.
+	 * request itself has to be inspected in order to bypass the cache. It is
+	 * limited to that screen and to users who can update plugins - the same
+	 * check core makes there - so that nobody else can make every admin page
+	 * load query the rate-limited API.
 	 *
 	 * @return bool
 	 */
 	private function is_forced_check()
 	{
-		return is_admin() && ! empty( $_GET['force-check'] );
+		global $pagenow;
+
+		return is_admin()
+			&& 'update-core.php' === $pagenow
+			&& ! empty( $_GET['force-check'] )
+			&& current_user_can( 'update_plugins' );
 	}
 
 } // DWLastModifiedUpdater
@@ -859,5 +904,7 @@ function the_dw_last_modified( $context = null, $override = null )
 DWLastModified::get_instance();
 
 register_activation_hook( __FILE__, array( 'DWLastModified', 'deactivate_replaced_plugins' ) );
+
+register_deactivation_hook( __FILE__, array( 'DWLastModifiedUpdater', 'clear_cache' ) );
 
 new DWLastModifiedUpdater( __FILE__ );

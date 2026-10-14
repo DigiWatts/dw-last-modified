@@ -3,6 +3,22 @@
 class ExposesFiltersTest extends WP_UnitTestCase
 {
 	/** @test */
+	function tolerates_filtered_defaults_that_leave_keys_out()
+	{
+		$GLOBALS['post'] = $this->factory->post->create_and_get();
+
+		add_filter('dw_last_modified_defaults', function ($all_defaults) {
+			$all_defaults['base'] = array('format' => '%date%');
+
+			return $all_defaults;
+		});
+
+		$output = get_the_dw_last_modified();
+
+		$this->assertStringContainsString(get_the_modified_date(), $output);
+	}
+
+	/** @test */
 	function allows_defaults_to_be_filtered()
 	{
 		$test_case = $this;

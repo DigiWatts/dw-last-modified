@@ -18,6 +18,15 @@ class ServesUpdatesTest extends WP_UnitTestCase
         delete_site_transient('dw_last_modified_release');
     }
 
+    public function tear_down()
+    {
+        unset($_GET['force-check']);
+        $GLOBALS['pagenow'] = 'index.php';
+        set_current_screen('front');
+
+        parent::tear_down();
+    }
+
     /** @test */
     function reports_the_latest_release_as_an_update()
     {
@@ -176,11 +185,113 @@ class ServesUpdatesTest extends WP_UnitTestCase
         $updater = $this->updater();
         $updater->check_for_update(false, $this->plugin_data(), $this->basename());
 
-        $updater->flush_cache_after_update(null, array('action' => 'update', 'type' => 'plugin'));
+        $updater->flush_cache_after_update(null, array('action' => 'update', 'type' => 'plugin', 'plugin' => $this->basename()));
 
         $updater->check_for_update(false, $this->plugin_data(), $this->basename());
 
         $this->assertSame(2, $this->requests);
+    }
+
+    /** @test */
+    function drops_the_cache_once_a_bulk_update_including_this_plugin_has_run()
+    {
+        $this->mock_release($this->release());
+
+        $updater = $this->updater();
+        $updater->check_for_update(false, $this->plugin_data(), $this->basename());
+
+        $updater->flush_cache_after_update(null, array('action' => 'update', 'type' => 'plugin', 'plugins' => array('akismet/akismet.php', $this->basename())));
+
+        $updater->check_for_update(false, $this->plugin_data(), $this->basename());
+
+        $this->assertSame(2, $this->requests);
+    }
+
+    /** @test */
+    function keeps_the_cache_when_a_different_plugin_was_updated()
+    {
+        $this->mock_release($this->release());
+
+        $updater = $this->updater();
+        $updater->check_for_update(false, $this->plugin_data(), $this->basename());
+
+        $updater->flush_cache_after_update(null, array('action' => 'update', 'type' => 'plugin', 'plugins' => array('akismet/akismet.php')));
+
+        $updater->check_for_update(false, $this->plugin_data(), $this->basename());
+
+        $this->assertSame(1, $this->requests);
+    }
+
+    /** @test */
+    function drops_the_cache_on_deactivation()
+    {
+        set_site_transient('dw_last_modified_release', $this->release());
+
+        do_action('deactivate_' . $this->basename(), false);
+
+        $this->assertFalse(get_site_transient('dw_last_modified_release'));
+    }
+
+    /** @test */
+    function check_again_bypasses_the_cache_for_users_who_can_update_plugins()
+    {
+        $this->mock_release($this->release());
+
+        $updater = $this->updater();
+        $updater->check_for_update(false, $this->plugin_data(), $this->basename());
+
+        $this->given_the_check_again_button('administrator', 'update-core.php');
+
+        $updater->check_for_update(false, $this->plugin_data(), $this->basename());
+
+        $this->assertSame(2, $this->requests);
+    }
+
+    /** @test */
+    function check_again_keeps_the_cache_for_users_who_cannot_update_plugins()
+    {
+        $this->mock_release($this->release());
+
+        $updater = $this->updater();
+        $updater->check_for_update(false, $this->plugin_data(), $this->basename());
+
+        $this->given_the_check_again_button('subscriber', 'update-core.php');
+
+        $updater->check_for_update(false, $this->plugin_data(), $this->basename());
+
+        $this->assertSame(1, $this->requests);
+    }
+
+    /** @test */
+    function check_again_keeps_the_cache_on_other_admin_screens()
+    {
+        $this->mock_release($this->release());
+
+        $updater = $this->updater();
+        $updater->check_for_update(false, $this->plugin_data(), $this->basename());
+
+        $this->given_the_check_again_button('administrator', 'index.php');
+
+        $updater->check_for_update(false, $this->plugin_data(), $this->basename());
+
+        $this->assertSame(1, $this->requests);
+    }
+
+    /** @test */
+    function ignores_a_zip_that_is_not_served_from_this_repositorys_releases()
+    {
+        $this->mock_release($this->release(array(
+            'assets' => array(
+                array(
+                    'name'                 => 'dw-last-modified.zip',
+                    'browser_download_url' => 'https://example.com/dw-last-modified.zip',
+                ),
+            ),
+        )));
+
+        $update = $this->updater()->check_for_update(false, $this->plugin_data(), $this->basename());
+
+        $this->assertFalse($update);
     }
 
     /** @test */
@@ -295,6 +406,18 @@ class ServesUpdatesTest extends WP_UnitTestCase
     // ---------------------------------------------------------------
     // Helpers
     // ---------------------------------------------------------------
+
+    /**
+     * Simulates a click on "Check again", which core sends as ?force-check=1.
+     */
+    private function given_the_check_again_button($role, $pagenow)
+    {
+        wp_set_current_user($this->factory->user->create(array('role' => $role)));
+        set_current_screen('update-core');
+
+        $GLOBALS['pagenow']  = $pagenow;
+        $_GET['force-check'] = '1';
+    }
 
     private function updater()
     {
