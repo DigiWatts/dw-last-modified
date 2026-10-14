@@ -43,7 +43,7 @@ This plugin does not enhance the block editor introduced as the default in WordP
 
 **Upgrading from Last Modified Timestamp or Last Modified By?**
 
-Deactivate and delete both of those plugins - this one replaces them. Nothing you have written against them needs to change:
+This plugin replaces them, and deactivates both when it is activated. Delete them once you've checked everything still works. Nothing you have written against them needs to change:
 
 * The `[last-modified]` shortcode still works, alongside the new `[dw-last-modified]`.
 * `get_the_last_modified_timestamp()` and `the_last_modified_timestamp()` still work, alongside `get_the_dw_last_modified()` and `the_dw_last_modified()`.
