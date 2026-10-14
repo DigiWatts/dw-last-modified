@@ -378,6 +378,32 @@ class DWLastModified
 		return self::$instance;
 	}
 
+	/**
+	 * Deactivates Last Modified Timestamp and Last Modified By, which this plugin
+	 * replaces. Left running alongside it they'd add a second column, Publish box
+	 * line and updated message. They're only deactivated, not deleted.
+	 *
+	 * Runs on activation. A per-site activation leaves network-active copies
+	 * alone, since other sites in the network may still rely on them.
+	 *
+	 * @param  bool 	$network_wide 	Whether this plugin is being network-activated.
+	 * @return void
+	 */
+	public static function deactivate_replaced_plugins( $network_wide = false )
+	{
+		$replaced = array(
+			'last-modified-timestamp/last-modified-timestamp.php',
+			'last-modified-by/last-modified-by.php',
+		);
+
+		if ( ! $network_wide )
+			$replaced = array_filter( $replaced, function ( $plugin ) {
+				return ! is_plugin_active_for_network( $plugin );
+			} );
+
+		deactivate_plugins( $replaced, false, (bool) $network_wide );
+	}
+
 } // DWLastModified
 
 /**
@@ -818,5 +844,7 @@ function the_dw_last_modified( $context = null, $override = null )
 
 //	MAKE IT SO.
 DWLastModified::get_instance();
+
+register_activation_hook( __FILE__, array( 'DWLastModified', 'deactivate_replaced_plugins' ) );
 
 new DWLastModifiedUpdater( __FILE__ );
