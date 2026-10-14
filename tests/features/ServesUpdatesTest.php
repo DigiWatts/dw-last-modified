@@ -99,6 +99,30 @@ class ServesUpdatesTest extends WP_UnitTestCase
     }
 
     /** @test */
+    function offers_no_update_when_the_updater_is_turned_off()
+    {
+        $this->mock_release($this->release());
+        add_filter('dw_last_modified_enable_updater', '__return_false');
+
+        $update = $this->updater()->check_for_update(false, $this->plugin_data(), $this->basename());
+
+        $this->assertFalse($update);
+        $this->assertSame(0, $this->requests, 'The API should not be queried while the updater is off.');
+    }
+
+    /** @test */
+    function offers_no_details_when_the_updater_is_turned_off()
+    {
+        $this->mock_release($this->release());
+        add_filter('dw_last_modified_enable_updater', '__return_false');
+
+        $information = $this->updater()->plugin_information(false, 'plugin_information', (object) array('slug' => $this->slug()));
+
+        $this->assertFalse($information);
+        $this->assertSame(0, $this->requests);
+    }
+
+    /** @test */
     function leaves_other_plugins_on_the_same_filter_alone()
     {
         $this->mock_release($this->release());

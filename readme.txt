@@ -103,6 +103,8 @@ To customize the output with a shortcode, use the attributes as described above.
 * **dw_last_modified_author_output** - allows the html for the modifying user to be filtered.  Passes 3 parameters (html, post id, display name). Was `last_modified_by_output`.
 * **dw_last_modified_author** - allows the display name of the modifying user to be filtered.  Passes 2 parameters (display name, post id). Was `the_modified_author`, which collided with the WordPress core filter of the same name - that is why it was renamed.
 
+* **dw_last_modified_enable_updater** - return false to stop the plugin offering updates from its GitHub releases, e.g. when it is installed and updated with Composer. Passes 1 parameter (bool, default true).
+
 Each pre-rename name is still applied, immediately after its current equivalent, so a callback on the old name still wins if both are hooked.
 
 For example, if you wanted to change the time format in the admin messages that appear after a post is modified to a 24hr format with leading zeros, add this to your theme's functions.php:
