@@ -440,6 +440,14 @@ class DWLastModifiedUpdater
 	const CACHE_KEY = 'dw_last_modified_release';
 
 	/**
+	 * Where the update screen's icons are served from.
+	 *
+	 * They live in the repository's assets/ folder rather than in the release
+	 * zip, which deliberately holds only the plugin file and readme.txt.
+	 */
+	const ICON_BASE = 'https://raw.githubusercontent.com/DigiWatts/dw-last-modified/main/assets/';
+
+	/**
 	 * How long a successful lookup is cached, in seconds.
 	 */
 	const CACHE_TTL = 43200; // 12 hours
@@ -530,6 +538,11 @@ class DWLastModifiedUpdater
 			'tested'       => $this->readme_field( 'Tested up to' ),
 			'requires'     => isset( $plugin_data['RequiresWP'] ) ? $plugin_data['RequiresWP'] : '',
 			'requires_php' => isset( $plugin_data['RequiresPHP'] ) ? $plugin_data['RequiresPHP'] : '',
+			'icons'        => array(
+				'svg' => self::ICON_BASE . 'icon.svg',
+				'2x'  => self::ICON_BASE . 'icon-256x256.png',
+				'1x'  => self::ICON_BASE . 'icon-128x128.png',
+			),
 		);
 	}
 

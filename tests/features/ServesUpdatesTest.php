@@ -61,6 +61,25 @@ class ServesUpdatesTest extends WP_UnitTestCase
     }
 
     /** @test */
+    function points_the_update_screen_at_icons_that_exist_in_the_repository()
+    {
+        $this->mock_release($this->release());
+
+        $update = $this->updater()->check_for_update(false, $this->plugin_data(), $this->basename());
+
+        $this->assertSame(array('svg', '2x', '1x'), array_keys($update['icons']));
+
+        // The URLs point at the main branch, so the files have to be committed
+        // under assets/ for the icons to resolve.
+        $base = 'https://raw.githubusercontent.com/DigiWatts/dw-last-modified/main/';
+
+        foreach ($update['icons'] as $url) {
+            $this->assertStringStartsWith($base, $url);
+            $this->assertFileExists(dirname(dirname(__DIR__)) . '/' . substr($url, strlen($base)));
+        }
+    }
+
+    /** @test */
     function tolerates_a_tag_cut_with_a_leading_v()
     {
         $this->mock_release($this->release(array('tag_name' => 'v9.9.9')));
