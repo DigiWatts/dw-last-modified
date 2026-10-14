@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.4.0](https://github.com/DigiWatts/dw-last-modified/compare/1.3.2...1.4.0) (2026-10-14)
+
+
+### Features
+
+* deactivate Last Modified Timestamp and Last Modified By on activation ([ca1ab81](https://github.com/DigiWatts/dw-last-modified/commit/ca1ab81cb8ec1edaae4887d140219d673645880f))
+* deactivate Last Modified Timestamp and Last Modified By on activation ([f7640e2](https://github.com/DigiWatts/dw-last-modified/commit/f7640e2c020707e84ed282d5242c200dc017ed9f))
+
 ## [1.3.2](https://github.com/DigiWatts/dw-last-modified/compare/1.3.1...1.3.2) (2026-10-14)
 
 
