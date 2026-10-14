@@ -13,6 +13,10 @@ on:
 jobs:
   test:
     name: PHP ${{ matrix.php }} / WP ${{ matrix.wp }}
+    # release.yml merges the release PR seconds after opening it and deletes the
+    # branch, which left runs on it failing before any job started. It only bumps
+    # versions, and the same code has already been tested on main.
+    if: ${{ !startsWith(github.head_ref, 'release-please--') }}
     runs-on: ubuntu-latest
 
     strategy:
