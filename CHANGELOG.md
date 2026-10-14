@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.6.0](https://github.com/DigiWatts/dw-last-modified/compare/1.5.3...1.6.0) (2026-10-14)
+
+
+### Features
+
+* add a filter to turn off the GitHub updater ([4f7a24f](https://github.com/DigiWatts/dw-last-modified/commit/4f7a24fb1a591a1e05c7d61c8eebf24f1c2f43c7))
+* make the plugin Composer-friendly ([69f697c](https://github.com/DigiWatts/dw-last-modified/commit/69f697c835829c25263ad8a86aa70498fff1cfd2))
+
 ## [1.5.3](https://github.com/DigiWatts/dw-last-modified/compare/1.5.2...1.5.3) (2026-10-14)
 
 
