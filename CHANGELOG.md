@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.2](https://github.com/DigiWatts/dw-last-modified/compare/1.3.1...1.3.2) (2026-10-14)
+
+
+### Developer
+
+* merge the release PR automatically ([2bdd2f3](https://github.com/DigiWatts/dw-last-modified/commit/2bdd2f3e1749a62674a3bdf2e0239f8bd1ce1ff1))
+
 ## [1.3.1](https://github.com/DigiWatts/dw-last-modified/compare/1.3.0...1.3.1) (2026-10-14)
 
 
