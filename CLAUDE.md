@@ -48,4 +48,5 @@ Releases are driven by release-please from Conventional Commits on `main`. The c
 
 - Don't hand-edit versions. release-please bumps `.release-please-manifest.json` and `CHANGELOG.md` in its release PR. CI then runs `bin/update-plugin-version.sh`, which copies the version into the `Version:` header, the `DW_LAST_MODIFIED_VERSION` constant and `readme.txt`'s `Stable tag`.
 - Tags have no `v` prefix.
+- The release PR is merged automatically by `release.yml`, in the same run that opened it. Since a merge made with `GITHUB_TOKEN` doesn't trigger another workflow run, that run calls release-please a second time to cut the release. Every releasable commit merged to `main` (`feat`, `fix`, `dev`, `perf`) therefore ships right away.
 - On merge, `bin/build.sh` attaches the zip to the release. The zip must have a top-level `dw-last-modified/` directory so the WordPress updater replaces the installed plugin in place.

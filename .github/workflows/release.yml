@@ -10,6 +10,12 @@ permissions:
   contents: write
   pull-requests: write
 
+# Two merges landing close together would otherwise race to update and merge
+# the same release PR.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
   release-please:
     runs-on: ubuntu-latest
@@ -56,16 +62,67 @@ jobs:
           git diff --cached --quiet || git commit -m "chore: sync plugin version"
           git push
 
-  build-plugin:
-    needs: release-please
-    if: needs.release-please.outputs.release_created == 'true'
+  # Merge the release PR straight away so every change that lands on main ships
+  # as a release. Pushes made with GITHUB_TOKEN don't start new workflow runs,
+  # so the merge can't rely on this workflow firing again - the release is cut
+  # by release-after-merge below, in this same run.
+  merge-release-pr:
+    needs: [release-please, update-version-on-pr]
     runs-on: ubuntu-latest
+
+    steps:
+      - name: Merge the release PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ fromJSON(needs.release-please.outputs.pr).number }}
+        run: |
+          # GitHub recomputes mergeability after the version-sync push, so the
+          # first attempts can be refused while that is still pending.
+          for attempt in 1 2 3 4 5 6; do
+            if gh pr merge "$PR_NUMBER" --squash; then
+              exit 0
+            fi
+            echo "Merge attempt $attempt failed, retrying in 10s"
+            sleep 10
+          done
+          exit 1
+
+  release-after-merge:
+    needs: merge-release-pr
+    runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+
+    steps:
+      - name: Run Release Please
+        id: release
+        uses: googleapis/release-please-action@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          config-file: .release-please-config.json
+          manifest-file: .release-please-manifest.json
+          skip-github-pull-request: true
+
+  # Runs for a release cut by either release-please job: the first one covers
+  # a release PR that was merged by hand.
+  build-plugin:
+    needs: [release-please, release-after-merge]
+    if: >-
+      always() && (
+        needs.release-please.outputs.release_created == 'true' ||
+        needs.release-after-merge.outputs.release_created == 'true'
+      )
+    runs-on: ubuntu-latest
+    env:
+      TAG_NAME: ${{ needs.release-please.outputs.tag_name || needs.release-after-merge.outputs.tag_name }}
 
     steps:
       - name: Checkout the release tag
         uses: actions/checkout@v7
         with:
-          ref: ${{ needs.release-please.outputs.tag_name }}
+          ref: ${{ env.TAG_NAME }}
 
       - name: Build the plugin zip
         run: |
@@ -75,5 +132,5 @@ jobs:
       - name: Upload the zip to the release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ needs.release-please.outputs.tag_name }}
+          tag_name: ${{ env.TAG_NAME }}
           files: dw-last-modified.zip
