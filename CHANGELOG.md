@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.1](https://github.com/DigiWatts/dw-last-modified/compare/1.3.0...1.3.1) (2026-10-14)
+
+
+### Developer
+
+* shape the changelog fixture like a real release body ([be691c6](https://github.com/DigiWatts/dw-last-modified/commit/be691c64be1a91ff17d88523660dd2b90045e6ff))
+
 ## [1.3.0](https://github.com/DigiWatts/dw-last-modified/compare/1.2.0...1.3.0) (2026-08-17)
 
 
