@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.5.1](https://github.com/DigiWatts/dw-last-modified/compare/1.5.0...1.5.1) (2026-10-14)
+
+
+### Bug Fixes
+
+* escape shortcode output and harden admin integration ([4be9e73](https://github.com/DigiWatts/dw-last-modified/commit/4be9e73187debda8995e28ea23ad08074859c77e))
+* escape shortcode output and harden admin integration ([99eeb63](https://github.com/DigiWatts/dw-last-modified/commit/99eeb633a37ce92fa52b5a73b083dc323b5bc986))
+
 ## [1.5.0](https://github.com/DigiWatts/dw-last-modified/compare/1.4.0...1.5.0) (2026-10-14)
 
 
