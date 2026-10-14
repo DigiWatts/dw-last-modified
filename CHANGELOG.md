@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.2](https://github.com/DigiWatts/dw-last-modified/compare/1.5.1...1.5.2) (2026-10-14)
+
+
+### Bug Fixes
+
+* harden the updater and tolerate incomplete filtered defaults ([02dbd0e](https://github.com/DigiWatts/dw-last-modified/commit/02dbd0e5787b7f1e1503ee5d4ccdaca51b02cfe1))
+
 ## [1.5.1](https://github.com/DigiWatts/dw-last-modified/compare/1.5.0...1.5.1) (2026-10-14)
 
 

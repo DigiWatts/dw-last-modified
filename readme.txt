@@ -1,5 +1,5 @@
 === DW Last Modified ===
-Stable tag: 1.5.1
+Stable tag: 1.5.2
 Contributors: erikdmitchell
 Tags: page modified, post modified, updated at, last modified, modified by
 Requires at least: 5.8
