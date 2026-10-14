@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.3](https://github.com/DigiWatts/dw-last-modified/compare/1.5.2...1.5.3) (2026-10-14)
+
+
+### Performance Improvements
+
+* look up list-table editors in one batch ([5b76a80](https://github.com/DigiWatts/dw-last-modified/commit/5b76a805e2366f30099f7fe9d263a0da525e7068))
+
 ## [1.5.2](https://github.com/DigiWatts/dw-last-modified/compare/1.5.1...1.5.2) (2026-10-14)
 
 
