@@ -621,6 +621,21 @@ class DWLastModifiedUpdater
 	}
 
 	/**
+	 * Whether updates should be served from GitHub releases.
+	 *
+	 * Sites that manage the plugin with Composer turn this off, so the dashboard
+	 * doesn't offer updates that don't match composer.lock and would be
+	 * overwritten by the next deploy, or fail outright on a read-only filesystem.
+	 * It is checked when core asks rather than in the constructor, which runs at
+	 * file load, before a theme or a later plugin could have added the filter.
+	 * @return bool
+	 */
+	public function is_enabled()
+	{
+		return (bool) apply_filters( 'dw_last_modified_enable_updater', true );
+	}
+
+	/**
 	 * Answers core's update check for this plugin.
 	 * @param  array|false 	$update 		Update data from an earlier callback, or false.
 	 * @param  array 		$plugin_data 	Headers of the plugin being checked.
@@ -632,6 +647,9 @@ class DWLastModifiedUpdater
 		// The filter fires for every installed plugin whose Update URI points at
 		// github.com, not only for this one.
 		if ( $plugin_file !== $this->basename )
+			return $update;
+
+		if ( ! $this->is_enabled() )
 			return $update;
 
 		$release = $this->get_release();
@@ -675,6 +693,9 @@ class DWLastModifiedUpdater
 			return $result;
 
 		if ( ! isset( $args->slug ) || $args->slug !== $this->slug )
+			return $result;
+
+		if ( ! $this->is_enabled() )
 			return $result;
 
 		$release = $this->get_release();
