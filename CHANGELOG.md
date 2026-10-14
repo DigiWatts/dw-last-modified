@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.5.0](https://github.com/DigiWatts/dw-last-modified/compare/1.4.0...1.5.0) (2026-10-14)
+
+
+### Features
+
+* show the plugin icon on the updates screen ([683ac8d](https://github.com/DigiWatts/dw-last-modified/commit/683ac8dea78ef86388b36fd34aef2843781a5dcc))
+* show the plugin icon on the updates screen ([0ad2536](https://github.com/DigiWatts/dw-last-modified/commit/0ad2536e56bfebbc07f60d2cfd1b0482fd7207ca))
+
 ## [1.4.0](https://github.com/DigiWatts/dw-last-modified/compare/1.3.2...1.4.0) (2026-10-14)
 
 
