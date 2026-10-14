@@ -1,0 +1,12 @@
+# Keep development files out of the archive Composer installs from.
+/.github export-ignore
+/assets export-ignore
+/bin export-ignore
+/tests export-ignore
+/.gitattributes export-ignore
+/.gitignore export-ignore
+/.release-please-config.json export-ignore
+/.release-please-manifest.json export-ignore
+/CLAUDE.md export-ignore
+/composer.lock export-ignore
+/phpunit.xml export-ignore
